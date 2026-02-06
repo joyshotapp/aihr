@@ -529,7 +529,7 @@ unihr-saas/
 | Phase 2 | 安全強化：SSO + 速率限制 + API 版本 + 功能旗標 | ✅ 完成 |
 | Phase 3 | 管理功能：配額 + 分析 + 前端頁面 | ✅ 完成 |
 | Phase 3+ | 文件引擎升級：19 格式 + 進階檢索 + 混合搜尋 | ✅ 完成 |
-| Phase 4 | 生產部署：CI/CD + 監控 + 負載測試 | 🔜 規劃中 |
+| Phase 4 | 生產化：前後台分離 + CI/CD + 白標 + 監控 + 安全稽核（20 任務） | 🔜 規劃中 |
 
 詳細任務清單與產品規格請參閱 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。
 

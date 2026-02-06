@@ -595,6 +595,14 @@ Onboarding 步驟：
 - 高資安方案（tenant project/account）
 - API rate limiting 與濫用偵測
 
+### Phase 4：生產化與前後台分離
+- 前端拆分：系統管理台（admin）與客戶端（client）分離為獨立應用
+- Admin API 網路隔離（IP 白名單 / VPN / 內網限制）
+- 白標支援（自訂 domain、logo、色系、品牌名稱）
+- CI/CD 自動化（GitHub Actions + Docker Registry + 自動部署）
+- 生產環境基礎建設（HTTPS、監控、日誌集中化、備份策略）
+- 負載測試與效能調優
+
 > 注意：本系統不做金流收費（Stripe/綠界等），定價與收費在系統外處理。成本追蹤的目的是讓你知道每家客戶的實際服務成本，作為報價與商務談判的依據。
 
 ---
@@ -1163,6 +1171,157 @@ unihr-saas/
 
 ---
 
+---
+
+### Phase 4：生產化與前後台分離（預估 6~10 週）
+
+**目標**：將系統從 MVP 階段升級為可對外販售的生產級 SaaS 產品。核心改造為前後台分離、網路隔離、白標支援與 CI/CD 自動化。
+
+#### 4A. 前端架構分離（第 1~3 週）🔴 高優先
+
+- ⬜ **T4-1** 建立獨立系統管理台前端（admin-frontend）
+  - 新建 `admin-frontend/` 獨立 Vite + React 專案
+  - 遷移 AdminPage、AdminQuotaPage、AnalyticsPage 到獨立應用
+  - 獨立的路由、認證流程、API 層
+  - 部署於 `admin.unihr.com`（內部 domain）
+  - 確保客戶端零 admin 程式碼（不打包、不下載）
+
+- ⬜ **T4-2** 客戶端前端精簡化
+  - 移除現有 frontend 中的 AdminPage、AdminQuotaPage、AnalyticsPage
+  - 移除 Layout.tsx 中的 `superuserOnly` 導航項目
+  - 移除 api.ts 中的 adminApi（跨租戶管理方法）
+  - 保留 CompanyPage（租戶自助管理）— 這是客戶方功能
+  - 部署於 `app.unihr.com`（公開 domain）
+
+- ⬜ **T4-3** 白標前端支援
+  - Tenant model 新增欄位：`brand_name`、`brand_logo_url`、`brand_primary_color`、`brand_secondary_color`、`custom_domain`
+  - 客戶端啟動時載入租戶品牌設定（`GET /api/v1/company/branding`）
+  - 登入頁、側邊欄 logo、頁首標題動態替換
+  - 支援自訂 domain 對映（`{客戶}.unihr.com` 或客戶自有域名）
+  - TailwindCSS CSS 變數化（primary/secondary color）
+
+#### 4B. 後端 API 分離與網路隔離（第 2~4 週）🔴 高優先
+
+- ⬜ **T4-4** Admin API 網路隔離
+  - 方案 A（簡單）：Nginx 反向代理層，`/api/v1/admin/*` 和 `/api/v1/analytics/*` 限制來源 IP
+  - 方案 B（進階）：Admin API 獨立 FastAPI 服務，部署於內網，不暴露公網
+  - 實作 IP 白名單 middleware（可設定允許的 CIDR 範圍）
+  - Admin API 加上額外的存取日誌（who / when / from where）
+
+- ⬜ **T4-5** API Gateway 導入
+  - 統一入口層：路由分發、速率限制、認證前置
+  - 選型：Nginx / Traefik / Kong（建議先用 Nginx + Lua 或 Traefik）
+  - 路由規則：
+    - `admin.unihr.com/api/*` → Admin API（內網）
+    - `app.unihr.com/api/*` → Tenant API（公網）
+    - `{custom_domain}/api/*` → Tenant API（公網，帶 tenant 識別）
+  - 健康檢查端點統一（`/healthz`）
+
+- ⬜ **T4-6** 自訂 domain 後端支援
+  - 建立 domain → tenant_id 映射表（CustomDomain model）
+  - Middleware：從 HTTP Host header 判斷 tenant（fallback 到 JWT tenant_id）
+  - Let's Encrypt 自動 SSL 憑證（Traefik ACME 或 certbot）
+  - DNS 驗證流程 API（CNAME 驗證）
+
+#### 4C. CI/CD 與部署自動化（第 3~5 週）🟡 中優先
+
+- ⬜ **T4-7** GitHub Actions CI Pipeline
+  - Push to main → 自動跑 lint + pytest
+  - PR 建立 → 自動跑測試 + 建置驗證
+  - 測試覆蓋率報告（pytest-cov）
+  - Docker image 自動建置並推送至 Container Registry
+
+- ⬜ **T4-8** 自動部署 Pipeline
+  - Staging：main branch 合併 → 自動部署至 staging 環境
+  - Production：手動觸發 or tag → 部署至生產環境
+  - 部署策略：Rolling update（零停機）
+  - 健康檢查 + 自動回滾機制
+  - 環境變數透過 GitHub Secrets 或 Vault 管理
+
+- ⬜ **T4-9** Docker 映像最佳化
+  - Multi-stage build（減少映像大小）
+  - 前端映像：Nginx + 靜態檔案（< 50MB）
+  - 後端映像：Python slim + 只安裝生產依賴（< 200MB）
+  - Docker Compose production 配置最終化
+  - 資源限制設定（CPU / Memory limits）
+
+#### 4D. 生產基礎建設（第 4~6 週）🟡 中優先
+
+- ⬜ **T4-10** HTTPS 與域名配置
+  - 購買並配置域名（unihr.com 或自選）
+  - SSL 憑證自動管理（Let's Encrypt + auto-renew）
+  - HSTS、CSP、CORS 安全標頭強化
+  - HTTP → HTTPS 強制跳轉
+
+- ⬜ **T4-11** 監控與告警系統
+  - 基礎監控：Prometheus + Grafana（或 UptimeRobot 等 SaaS 方案）
+  - 應用指標：API 回應時間、錯誤率、活躍用戶數、佇列深度
+  - 基礎建設指標：CPU、記憶體、磁碟、DB 連線數
+  - 告警通道：Email / Slack / LINE Notify
+  - 告警規則：API 5xx > 1%、回應時間 p95 > 3s、DB 連線池耗盡
+
+- ⬜ **T4-12** 日誌集中化
+  - 結構化日誌（JSON format）+ request_id 追蹤
+  - 集中收集：ELK Stack / Loki + Grafana（或 CloudWatch）
+  - 日誌保留策略：30 天熱存、90 天冷存
+  - 敏感資訊遮罩（PII masking）
+
+- ⬜ **T4-13** 備份與災難復原
+  - PostgreSQL：每日自動備份（pg_dump / WAL archiving）
+  - 備份加密與異地儲存（S3 / GCS）
+  - 復原演練 SOP（每季一次）
+  - RPO < 1 小時、RTO < 4 小時
+
+#### 4E. 效能與安全強化（第 5~8 週）🟢 可延後
+
+- ⬜ **T4-14** 負載測試
+  - 使用 Locust 或 k6 建立負載測試腳本
+  - 測試情境：100 concurrent users、1000 req/min
+  - 找出瓶頸：DB 連線池、Celery worker 數、API 回應時間
+  - 效能基準線建立與記錄
+
+- ⬜ **T4-15** 資料庫調優
+  - 索引最佳化（常用查詢的 EXPLAIN ANALYZE）
+  - 連線池調參（pool_size、max_overflow）
+  - 讀寫分離準備（Read Replica 配置）
+  - Slow query log 監控
+
+- ⬜ **T4-16** 安全稽核與滲透測試
+  - OWASP Top 10 逐項檢查
+  - SQL Injection / XSS / CSRF 防護驗證
+  - 依賴套件漏洞掃描（pip-audit / npm audit）
+  - Session 管理強化（token 輪替、concurrent session 限制）
+  - 第三方滲透測試（上線前至少一次）
+
+- ⬜ **T4-17** 訂閱方案與用量計量基礎
+  - 方案功能矩陣定義（Free / Pro / Enterprise 各含什麼）
+  - 前端方案升級提示（達到 Free 上限時引導升級）
+  - 用量計量匯出 API（給外部帳務系統或手動出帳用）
+  - 注意：不做金流串接，仍為系統外處理
+
+#### 4F. 文件與交付（第 7~10 週）🟢 可延後
+
+- ⬜ **T4-18** 使用者操作手冊
+  - 租戶管理員手冊（公司設定、成員管理、文件上傳）
+  - 一般員工使用手冊（問答操作、對話歷史）
+  - 系統管理員手冊（平台監控、租戶管理、配額調整）
+  - FAQ 與 Troubleshooting
+
+- ⬜ **T4-19** API 開發者文件
+  - OpenAPI 3.0 規格自動產生（FastAPI 內建）
+  - API 使用範例（curl / Python / JavaScript）
+  - Webhook 事件說明（如未來擴充）
+  - Rate Limit 說明與最佳實踐
+
+- ⬜ **T4-20** 運維 SOP
+  - 部署流程 SOP
+  - 回滾流程 SOP
+  - 資料庫維護 SOP（migration、備份驗證）
+  - 事故應對 SOP（P1/P2/P3 分級與處理流程）
+  - 值班與通知排程
+
+---
+
 ### 任務依賴關係
 
 ```
@@ -1173,7 +1332,7 @@ Phase 0 (Core)
   T0-6, T0-7 （獨立）
        │
        ▼ Phase 0 完成後
-Phase 1 (SaaS)
+Phase 1 (SaaS)  ✅ 已完成
   T1-1 ──→ T1-2 ──→ T1-3 ──→ T1-4
                                │
                      T1-5 ──→ T1-6
@@ -1185,7 +1344,7 @@ Phase 1 (SaaS)
                      T1-12 ──→ T1-13 ──→ T1-14
        │
        ▼ Phase 1 完成後
-Phase 2 (企業化)
+Phase 2 (企業化)  ✅ 已完成
   T2-3 （獨立，已完成）
   T2-2 （獨立，已完成）
   T2-1 （依賴 T1-3 Auth）
@@ -1193,13 +1352,45 @@ Phase 2 (企業化)
   T2-4, T2-5, T2-6 （獨立，可並行）
        │
        ▼ Phase 2 完成後
-Phase 3 (商業化)
+Phase 3 (商業化)  ✅ 已完成
   T2-7/T2-8 ──→ T3-1 （配額管理依賴管理後台）
   T3-2 （客戶自助後台，獨立）
   T3-3, T3-4, T3-5 （獨立）
+       │
+       ▼ Phase 3 完成後
+Phase 4 (生產化) ⬜ 規劃中
+  ┌── 4A 前端分離 ──────────────────────────┐
+  │ T4-1 (admin-frontend) ──→ T4-2 (client 精簡) │
+  │ T4-3 (白標)  依賴 T4-2                       │
+  └──────────────────────────────────────────┘
+  ┌── 4B API 分離 ─────────────────────────────┐
+  │ T4-4 (Admin 網路隔離)  依賴 T4-1            │
+  │ T4-5 (API Gateway)    可與 T4-4 並行        │
+  │ T4-6 (自訂 domain)    依賴 T4-3 + T4-5      │
+  └──────────────────────────────────────────┘
+  ┌── 4C CI/CD ─────────────────────────────┐
+  │ T4-7 (CI) → T4-8 (CD) → T4-9 (映像最佳化) │
+  │ 可與 4A/4B 並行                             │
+  └──────────────────────────────────────────┘
+  ┌── 4D 基礎建設 ──────────────────────────┐
+  │ T4-10 (HTTPS)  依賴 T4-5                │
+  │ T4-11 (監控) → T4-12 (日誌)  可並行     │
+  │ T4-13 (備份)  獨立                       │
+  └──────────────────────────────────────────┘
+  ┌── 4E 效能安全 ──────────────────────────┐
+  │ T4-14 (負載測試)  依賴 4D 環境完成       │
+  │ T4-15 (DB 調優)   依賴 T4-14 結果       │
+  │ T4-16 (安全稽核)  獨立，上線前必完成     │
+  │ T4-17 (方案計量)  獨立                   │
+  └──────────────────────────────────────────┘
+  ┌── 4F 文件交付 ──────────────────────────┐
+  │ T4-18 ~ T4-20  可全程並行撰寫           │
+  └──────────────────────────────────────────┘
 ```
 
-> **Phase 2 關鍵路徑**：T2-7 → T2-8（平台管理後台）是商業化的基礎設施
+> **Phase 4 關鍵路徑**：T4-1 → T4-2 → T4-4（前端分離 → Admin 網路隔離）是上線販售前的最高優先改造
+>
+> **Phase 4 上線門檻（Minimum）**：T4-1 + T4-2 + T4-4 + T4-7 + T4-10 + T4-13 + T4-16（前後台分離 + CI + HTTPS + 備份 + 安全稽核）
 
 ---
 
@@ -1270,8 +1461,11 @@ Phase 3 (商業化)
 **Phase 0: Core 側改造**（獨立專案，不阻擋 SaaS）
 - T0-1 ~ T0-7：Core API 版本化、認證、token 用量回傳等
 
-**生產環境部署**
-- 購買雲端伺服器
-- 配置域名與 SSL
-- 設置備份與監控
-- 制定運維 SOP
+**Phase 4: 生產化與前後台分離**（預估 6~10 週）
+- 4A：前端拆分為系統管理台 + 客戶端（T4-1 ~ T4-3）
+- 4B：Admin API 網路隔離 + API Gateway + 白標 domain（T4-4 ~ T4-6）
+- 4C：CI/CD 自動化（T4-7 ~ T4-9）
+- 4D：HTTPS、監控、日誌、備份（T4-10 ~ T4-13）
+- 4E：負載測試、DB 調優、安全稽核（T4-14 ~ T4-17）
+- 4F：使用者手冊、API 文件、運維 SOP（T4-18 ~ T4-20）
+- 共 20 個任務，關鍵路徑：T4-1 → T4-2 → T4-4（前後台分離是上線門檻）
