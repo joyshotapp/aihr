@@ -1,0 +1,25 @@
+# 依賴套件
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# 環境變數
+.env
+.env.local
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 作業系統
+.DS_Store
+Thumbs.db
+
+# 建置輸出
+dist/
+build/
+*.log
