@@ -1390,7 +1390,7 @@ Phase 3 (商業化)  ✅ 已完成
   T3-3, T3-4, T3-5 （獨立）
        │
        ▼ Phase 3 完成後
-Phase 4 (生產化) 🟡 進行中
+Phase 4 (生產化) ✅ 已完成
   ┌── 4A 前端分離 ──────────────────────────┐
   │ T4-1 (admin-frontend) ──→ T4-2 (client 精簡) │
   │ T4-3 (白標)  依賴 T4-2                       │
@@ -1438,47 +1438,58 @@ Phase 4 (生產化) 🟡 進行中
 
 ---
 
-## 附錄 B：開發完成總結（2026年2月6日）
+## 附錄 B：開發完成總結
 
-### 🎉 開發完成狀態
+### 🎉 開發完成狀態（最後更新：2026-02-08）
 
-**✅ Phase 1: MVP** - 12/12 任務完成
+**✅ Phase 1: MVP** — 12/12 任務完成
 - 多租戶架構、認證授權、文件管理、對話系統、稽核日誌、前端頁面
 - Docker 本地部署環境完成
 
-**✅ Phase 2: 企業化** - 8/8 任務完成  
+**✅ Phase 2: 企業化** — 8/8 任務完成
 - SSO（Google/Microsoft）、部門管理、權限細化、報表匯出、平台管理後台
 
-**✅ Phase 3: 商業化深化** - 5/5 後端 + 前端完成
+**✅ Phase 3: 商業化深化** — 5/5 後端 + 前端完成
 - 配額管理、客戶自助、安全隔離、API 限流、成本分析
 - 52/52 測試通過
 - 3 個主要管理頁面完成（AdminQuotaPage, CompanyPage, AnalyticsPage）
+
+**✅ Phase 4: 生產化** — 22/22 任務完成
+- 4A 前端分離：Admin 前端 SPA + 租戶前端精簡 + 白標品牌系統（T4-1 ~ T4-3）
+- 4B API 分離：Admin 獨立微服務 + Nginx Gateway + 自訂網域 CNAME（T4-4 ~ T4-6）
+- 4C CI/CD：GitHub Actions（CI + Staging + Production 部署）（T4-7 ~ T4-9）
+- 4D 基礎建設：HTTPS、Prometheus + Grafana 監控、Alertmanager 告警、備份（T4-10 ~ T4-13）
+- 4E 效能安全：負載測試（Locust/k6）、DB 索引優化、安全稽核、訂閱方案、Celery 監控、多區域部署（T4-14 ~ T4-19）
+- 4F 文件交付：使用者手冊、API 開發者指南、維運 SOP、多區域指南（T4-20 ~ T4-22）
+- PostgreSQL 效能調優、Nginx 安全 Headers、多環境部署設定
 
 ### 🚀 部署狀態
 
 **✅ Docker 開發環境（本地）**
 - 前端：http://localhost:3001 (Nginx 容器)
 - 後端：http://localhost:8000 (FastAPI + Uvicorn)
+- Admin API：http://localhost:8001 (FastAPI 微服務)
 - 數據庫：PostgreSQL 15 (端口 5432)
 - 緩存：Redis 7 (端口 6379)
 - 背景任務：Celery Worker
-- 構建狀態：Frontend build 成功，Backend 運行正常
 
-**⏭️ 生產環境部署（待規劃）**
-- 遠端伺服器建置（雲端 VPS）
-- HTTPS 與域名配置
-- 系統服務化（systemd）
-- 日誌與監控集中化
+**✅ Docker 生產環境（12 容器）**
+- Nginx Gateway 多域名路由（app / admin / grafana）
+- Gunicorn + Uvicorn Workers（多進程）
+- Prometheus + Grafana + Alertmanager 監控堆疊
+- Admin 獨立微服務 + 獨立 Redis
+- 多區域部署支援（ap / us / eu / jp）
+- CI/CD Pipeline（GitHub Actions）
 
 ### 📊 技術棧總覽
 
 **後端**
-- FastAPI 0.115 + Python 3.11
-- PostgreSQL 15 + SQLAlchemy 2.0
-- Redis 7 + Celery
+- FastAPI 0.109 + Python 3.13
+- PostgreSQL 15 + SQLAlchemy 2.0（含效能調優）
+- Redis 7 + Celery 5.3
 - JWT 認證 + RBAC 權限
 - Pinecone 向量資料庫
-- Voyage AI Embeddings
+- Voyage AI Embeddings + Reranking
 
 **前端**
 - React 19.2 + TypeScript 5.9
@@ -1488,20 +1499,15 @@ Phase 4 (生產化) 🟡 進行中
 - Lucide React Icons
 
 **DevOps**
-- Docker + Docker Compose
+- Docker + Docker Compose（開發 / Staging / Production）
+- GitHub Actions CI/CD（3 工作流）
+- Nginx 反向代理（多域名 + 安全 Headers）
+- Prometheus + Grafana + Alertmanager
 - Alembic Migrations
-- Pytest (52 測試通過)
+- Pytest（52 測試通過）
+- Locust + k6 負載測試
 
 ### 📝 待辦事項
 
-**Phase 0: Core 側改造**（獨立專案，不阻擋 SaaS）
+**Phase 0: Core 側改造**（獨立專案，不阻擋 SaaS 上線）
 - T0-1 ~ T0-7：Core API 版本化、認證、token 用量回傳等
-
-**Phase 4: 生產化與前後台分離**（預估 6~10 週）
-- 4A：前端拆分為系統管理台 + 客戶端（T4-1 ~ T4-3）
-- 4B：Admin API 網路隔離 + API Gateway + 白標 domain（T4-4 ~ T4-6）
-- 4C：CI/CD 自動化（T4-7 ~ T4-9）
-- 4D：HTTPS、監控、日誌、備份（T4-10 ~ T4-13）
-- 4E：負載測試、DB 調優、安全稽核、Admin 微服務化、多區域部署（T4-14 ~ T4-19）
-- 4F：使用者手冊、API 文件、運維 SOP（T4-20 ~ T4-22）
-- 共 22 個任務，關鍵路徑：T4-1 → T4-2 → T4-4（前後台分離是上線門檻）
