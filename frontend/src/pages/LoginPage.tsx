@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth'
 import { ssoApi } from '../api'
-import { Shield, Loader2 } from 'lucide-react'
+import { Shield, Loader2, Mail, Building2, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ─── SSO helpers ───
@@ -53,20 +53,45 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSSO, setShowSSO] = useState(false)
-  const [tenantId, setTenantId] = useState('')
-  const [googleClientId, setGoogleClientId] = useState('')
-  const [msClientId, setMsClientId] = useState('')
+
+  // SSO discovery state
+  const [ssoEmail, setSsoEmail] = useState('')
+  const [ssoDiscovering, setSsoDiscovering] = useState(false)
+  const [ssoDiscovered, setSsoDiscovered] = useState<{
+    tenant_id: string
+    tenant_name: string
+    providers: { provider: string; client_id: string }[]
+  } | null>(null)
+
+  // Discover SSO by email domain
+  const handleSSODiscover = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!ssoEmail.includes('@')) {
+      toast.error('請輸入有效的工作電子郵件')
+      return
+    }
+    setSsoDiscovering(true)
+    try {
+      const result = await ssoApi.discover(ssoEmail)
+      setSsoDiscovered(result)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '找不到此郵件域名的 SSO 設定'
+      toast.error(msg)
+    } finally {
+      setSsoDiscovering(false)
+    }
+  }
 
   const startSSO = async (provider: 'google' | 'microsoft', clientId: string) => {
-    if (!tenantId || !clientId) return
+    if (!ssoDiscovered) return
 
     try {
-      const { state } = await ssoApi.state({ tenant_id: tenantId, provider })
+      const { state } = await ssoApi.state({ tenant_id: ssoDiscovered.tenant_id, provider })
 
       const codeVerifier = randomString(64)
       const codeChallenge = await sha256Base64Url(codeVerifier)
 
-      localStorage.setItem('sso_tenant_id', tenantId)
+      localStorage.setItem('sso_tenant_id', ssoDiscovered.tenant_id)
       localStorage.setItem('sso_provider', provider)
       localStorage.setItem('sso_state', state)
       localStorage.setItem('sso_code_verifier', codeVerifier)
@@ -172,45 +197,75 @@ export default function LoginPage() {
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
             <div className="relative flex justify-center">
-              <button type="button" onClick={() => setShowSSO(!showSSO)} className="bg-white px-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+              <button type="button" onClick={() => { setShowSSO(!showSSO); setSsoDiscovered(null); setSsoEmail('') }} className="bg-white px-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
                 {showSSO ? '隱藏 SSO 登入' : '使用 SSO 登入'}
               </button>
             </div>
           </div>
 
-          {/* SSO Section */}
-          {showSSO && (
+          {/* SSO Section — Email-based auto-discovery */}
+          {showSSO && !ssoDiscovered && (
             <div className="space-y-3">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-gray-500">租戶 ID（請向管理員確認）</label>
-                <input type="text" value={tenantId} onChange={(e) => setTenantId(e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Mail className="h-4 w-4 text-blue-500" />
+                <span>輸入工作信箱，系統自動識別您的組織</span>
               </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-gray-500">Google Client ID（選填）</label>
-                <input type="text" value={googleClientId} onChange={(e) => setGoogleClientId(e.target.value)}
-                  placeholder="xxxxx.apps.googleusercontent.com"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-gray-500">Microsoft Client ID（選填）</label>
-                <input type="text" value={msClientId} onChange={(e) => setMsClientId(e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none" />
+              <form onSubmit={handleSSODiscover} className="flex gap-2">
+                <input
+                  type="email"
+                  value={ssoEmail}
+                  onChange={(e) => setSsoEmail(e.target.value)}
+                  placeholder="name@yourcompany.com"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={ssoDiscovering}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {ssoDiscovering ? <Loader2 className="h-4 w-4 animate-spin" /> : '查詢'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* SSO Discovered — show tenant info + provider buttons */}
+          {showSSO && ssoDiscovered && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">{ssoDiscovered.tenant_name}</p>
+                    <p className="text-xs text-green-600">{ssoEmail}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setSsoDiscovered(null); setSsoEmail('') }}
+                  className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors"
+                >
+                  <ArrowLeft className="h-3 w-3" />
+                  重新查詢
+                </button>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <button type="button" disabled={!tenantId || !googleClientId}
-                  onClick={() => startSSO('google', googleClientId)}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors">
-                  <GoogleIcon /> Google
-                </button>
-                <button type="button" disabled={!tenantId || !msClientId}
-                  onClick={() => startSSO('microsoft', msClientId)}
-                  className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors">
-                  <MicrosoftIcon /> Microsoft
-                </button>
+                {ssoDiscovered.providers.map((p) => (
+                  <button
+                    key={p.provider}
+                    type="button"
+                    onClick={() => startSSO(p.provider as 'google' | 'microsoft', p.client_id)}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {p.provider === 'google' ? <GoogleIcon /> : <MicrosoftIcon />}
+                    {p.provider === 'google' ? 'Google' : 'Microsoft'}
+                  </button>
+                ))}
               </div>
+              {ssoDiscovered.providers.length === 0 && (
+                <p className="text-center text-xs text-gray-400">此組織尚未啟用 SSO 供應商</p>
+              )}
             </div>
           )}
         </form>

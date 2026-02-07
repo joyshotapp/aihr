@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.api.deps_permissions import require_admin
 from app.models.custom_domain import CustomDomain
 from app.models.tenant import Tenant
 from app.models.user import User
@@ -49,13 +50,6 @@ class DomainVerifyResult(BaseModel):
 
 # ── Helpers ──
 
-def _ensure_owner_admin(user: User):
-    if user.is_superuser:
-        return
-    if user.role not in ("owner", "admin"):
-        raise HTTPException(status_code=403, detail="需要 Owner 或 Admin 角色")
-
-
 def _generate_verification_token(tenant_id: str, domain: str) -> str:
     """Generate a deterministic verification token."""
     raw = f"unihr-verify-{tenant_id}-{domain}-{uuid.uuid4().hex[:8]}"
@@ -67,10 +61,9 @@ def _generate_verification_token(tenant_id: str, domain: str) -> str:
 @router.get("/", response_model=List[DomainInfo])
 def list_domains(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """列出本租戶的所有自訂域名"""
-    _ensure_owner_admin(current_user)
     domains = db.query(CustomDomain).filter(
         CustomDomain.tenant_id == current_user.tenant_id
     ).order_by(CustomDomain.created_at.desc()).all()
@@ -92,10 +85,9 @@ def list_domains(
 def add_domain(
     body: DomainCreate,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """新增自訂域名（需 Pro / Enterprise 方案）"""
-    _ensure_owner_admin(current_user)
 
     # Plan check
     tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
@@ -141,16 +133,9 @@ def add_domain(
 def verify_domain(
     domain_id: str,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
-    """
-    驗證域名 DNS TXT 記錄
-
-    租戶須在 DNS 中新增 TXT 記錄：
-      _unihr-verify.{domain}  →  {verification_token}
-    """
-    _ensure_owner_admin(current_user)
-
+    """驗證域名 DNS TXT 記錄"""
     record = db.query(CustomDomain).filter(
         CustomDomain.id == domain_id,
         CustomDomain.tenant_id == current_user.tenant_id,
@@ -219,10 +204,9 @@ def verify_domain(
 def delete_domain(
     domain_id: str,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """刪除自訂域名"""
-    _ensure_owner_admin(current_user)
 
     record = db.query(CustomDomain).filter(
         CustomDomain.id == domain_id,

@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.api.deps_permissions import require_admin
 from app.config import settings
 from app.core import security
 from app.crud import crud_user
@@ -36,6 +37,9 @@ from app.schemas.sso import (
     SSOConfigPublic,
     SSOStateRequest,
     SSOStateResponse,
+    SSODiscoverRequest,
+    SSODiscoverResponse,
+    SSODiscoverProvider,
 )
 from app.schemas.token import Token
 
@@ -166,6 +170,55 @@ def list_sso_providers(
         .all()
     )
     return configs
+
+
+@router.post("/sso/discover", response_model=SSODiscoverResponse)
+def discover_sso_by_email(
+    body: SSODiscoverRequest,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """Auto-detect tenant and SSO providers by user's email domain.
+
+    Instead of requiring a raw UUID tenant_id, users just enter their
+    work email and we look up which tenant has that domain configured.
+    """
+    email = body.email.lower().strip()
+    if "@" not in email:
+        raise HTTPException(status_code=422, detail="請輸入有效的電子郵件地址")
+
+    domain = email.split("@")[-1]
+
+    # Find enabled SSO configs whose allowed_domains contain this domain
+    all_configs = (
+        db.query(TenantSSOConfig)
+        .filter(TenantSSOConfig.enabled == True)
+        .all()
+    )
+
+    matching = [cfg for cfg in all_configs if cfg.allowed_domains and domain in cfg.allowed_domains]
+
+    if not matching:
+        raise HTTPException(
+            status_code=404,
+            detail=f"找不到 {domain} 對應的 SSO 設定，請聯絡管理員。",
+        )
+
+    # Group by first matching tenant
+    tenant_id = matching[0].tenant_id
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    tenant_name = tenant.name if tenant else "Unknown"
+
+    providers = [
+        SSODiscoverProvider(provider=cfg.provider, client_id=cfg.client_id)
+        for cfg in matching
+        if cfg.tenant_id == tenant_id
+    ]
+
+    return SSODiscoverResponse(
+        tenant_id=tenant_id,
+        tenant_name=tenant_name,
+        providers=providers,
+    )
 
 
 @router.post("/sso/state", response_model=SSOStateResponse)
@@ -305,11 +358,9 @@ async def sso_callback(
 def create_sso_config(
     body: SSOConfigCreate,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """Create (or overwrite) SSO config for the current user's tenant."""
-    if current_user.role not in ("owner", "admin") and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     existing = (
         db.query(TenantSSOConfig)
@@ -346,11 +397,9 @@ def create_sso_config(
 @router.get("/sso/config", response_model=List[SSOConfigRead])
 def list_sso_configs(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """List SSO configs for current tenant (owner/admin only)."""
-    if current_user.role not in ("owner", "admin") and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     configs = (
         db.query(TenantSSOConfig)
         .filter(TenantSSOConfig.tenant_id == current_user.tenant_id)
@@ -364,11 +413,9 @@ def update_sso_config(
     provider: str,
     body: SSOConfigUpdate,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """Update an existing SSO config."""
-    if current_user.role not in ("owner", "admin") and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     cfg = (
         db.query(TenantSSOConfig)
@@ -393,11 +440,9 @@ def update_sso_config(
 def delete_sso_config(
     provider: str,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """Delete SSO config for a provider."""
-    if current_user.role not in ("owner", "admin") and not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     cfg = (
         db.query(TenantSSOConfig)

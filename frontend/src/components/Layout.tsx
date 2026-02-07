@@ -1,18 +1,21 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useBranding } from '../contexts/BrandingContext'
-import { MessageSquare, FileText, BarChart3, LogOut, Shield, ClipboardList, Building2, KeyRound, Palette, CreditCard } from 'lucide-react'
+import { MessageSquare, FileText, BarChart3, LogOut, Shield, ClipboardList, Building2, KeyRound, Palette, CreditCard, Globe, MapPin, Activity } from 'lucide-react'
 import clsx from 'clsx'
 
 const navItems = [
   { to: '/', icon: MessageSquare, label: 'AI 問答' },
   { to: '/documents', icon: FileText, label: '文件管理' },
+  { to: '/my-usage', icon: Activity, label: '我的用量' },
   { to: '/usage', icon: BarChart3, label: '用量統計', roles: ['owner', 'admin'] },
   { to: '/audit', icon: ClipboardList, label: '稽核日誌', roles: ['owner', 'admin'] },
   { to: '/departments', icon: Building2, label: '部門管理', roles: ['owner', 'admin', 'hr'] },
   { to: '/company', icon: Building2, label: '公司管理', roles: ['owner', 'admin'] },
   { to: '/branding', icon: Palette, label: '品牌設定', roles: ['owner', 'admin'] },
   { to: '/subscription', icon: CreditCard, label: '訂閱方案', roles: ['owner', 'admin'] },
+  { to: '/custom-domains', icon: Globe, label: '自訂域名', roles: ['owner', 'admin'] },
+  { to: '/regions', icon: MapPin, label: '區域資訊' },
   { to: '/sso-settings', icon: KeyRound, label: 'SSO 設定', roles: ['owner', 'admin'] },
 ]
 

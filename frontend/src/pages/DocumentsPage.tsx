@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { docApi } from '../api'
+import api from '../api'
 import { useAuth } from '../auth'
 import type { Document } from '../types'
-import { Upload, FileText, Trash2, Loader2, CheckCircle, AlertCircle, Clock, RefreshCw } from 'lucide-react'
+import { Upload, FileText, Trash2, Loader2, CheckCircle, AlertCircle, Clock, RefreshCw, Filter } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -29,19 +30,29 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
+  const [selectedDept, setSelectedDept] = useState<string>('')
 
   const canManage = ['owner', 'admin', 'hr'].includes(user?.role ?? '')
 
+  // Load departments for filter
+  useEffect(() => {
+    api.get<{ id: string; name: string }[]>('/departments/')
+      .then(r => setDepartments(r.data))
+      .catch(() => {})
+  }, [])
+
   const loadDocs = useCallback(async () => {
     try {
-      const list = await docApi.list()
+      const params = selectedDept ? { department_id: selectedDept } : undefined
+      const list = await docApi.list(params)
       setDocs(list)
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [selectedDept])
 
   useEffect(() => { loadDocs() }, [loadDocs])
 
@@ -100,9 +111,26 @@ export default function DocumentsPage() {
           <h1 className="text-lg font-semibold text-gray-900">文件管理</h1>
           <p className="text-sm text-gray-500">{docs.length} 個文件</p>
         </div>
-        <button onClick={loadDocs} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 transition-colors" title="重新整理">
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-3">
+          {departments.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-4 w-4 text-gray-400" />
+              <select
+                value={selectedDept}
+                onChange={e => { setSelectedDept(e.target.value); setLoading(true) }}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">所有部門</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button onClick={loadDocs} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 transition-colors" title="重新整理">
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">

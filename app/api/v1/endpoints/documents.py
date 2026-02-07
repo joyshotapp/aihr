@@ -1,15 +1,16 @@
 import os
 import uuid
 import aiofiles
-from typing import Any, List
+from typing import Any, List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.api.deps_permissions import check_document_permission
 from app.crud import crud_document
 from app.models.user import User
+from app.models.document import Document as DocumentModel
 from app.schemas.document import Document, DocumentCreate
 from app.config import settings
 from app.tasks.document_tasks import process_document_task
@@ -23,14 +24,28 @@ def list_documents(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
+    department_id: Optional[UUID] = Query(None, description="Filter by department"),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """
-    獲取當前租戶的文件列表
+    獲取當前租戶的文件列表，可依部門篩選
     """
-    documents = crud_document.get_by_tenant(
-        db, tenant_id=current_user.tenant_id, skip=skip, limit=limit
-    )
+    if department_id:
+        documents = (
+            db.query(DocumentModel)
+            .filter(
+                DocumentModel.tenant_id == current_user.tenant_id,
+                DocumentModel.department_id == department_id,
+            )
+            .order_by(DocumentModel.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+    else:
+        documents = crud_document.get_by_tenant(
+            db, tenant_id=current_user.tenant_id, skip=skip, limit=limit
+        )
     return documents
 
 

@@ -20,27 +20,28 @@ def require_superuser(current_user: User = Depends(deps.get_current_active_user)
 
 class PermissionChecker:
     """
-    權限檢查器
+    權限檢查器 — FastAPI Dependency
     使用方式:
         @router.get("/")
         def endpoint(
-            current_user: User = Depends(deps.get_current_active_user),
-            _: None = Depends(PermissionChecker(["owner", "admin"]))
+            db: Session = Depends(deps.get_db),
+            current_user: User = Depends(require_admin),
         ):
-            ...
+            ...  # current_user 已通過權限檢查
     """
     
     def __init__(self, allowed_roles: List[str]):
         self.allowed_roles = allowed_roles
     
-    def __call__(self, current_user: User) -> None:
+    def __call__(self, current_user: User = Depends(deps.get_current_active_user)) -> User:
         if current_user.is_superuser:
-            return  # Superuser bypasses all permission checks
+            return current_user
         if current_user.role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"此操作需要以下角色之一: {', '.join(self.allowed_roles)}"
             )
+        return current_user
 
 
 # 預定義的權限檢查器

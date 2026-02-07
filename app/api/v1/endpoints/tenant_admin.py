@@ -96,26 +96,15 @@ class CompanyDashboard(BaseModel):
 #  Company Dashboard
 # ═══════════════════════════════════════════
 
-def _ensure_owner_admin(current_user: User):
-    """確保使用者為 owner 或 admin"""
-    if current_user.is_superuser:
-        return
-    if current_user.role not in ("owner", "admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="此功能需要 Owner 或 Admin 角色"
-        )
-
 
 @router.get("/dashboard", response_model=CompanyDashboard)
 def company_dashboard(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """
     公司儀表板 — Owner/Admin 查看公司概況與配額狀態
     """
-    _ensure_owner_admin(current_user)
     tid = current_user.tenant_id
     tenant = crud_tenant.get(db, tid)
     if not tenant:
@@ -159,10 +148,9 @@ def company_dashboard(
 @router.get("/profile", response_model=CompanyProfile)
 def get_company_profile(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """查看公司資訊"""
-    _ensure_owner_admin(current_user)
     tid = current_user.tenant_id
     tenant = crud_tenant.get(db, tid)
     if not tenant:
@@ -187,10 +175,9 @@ def get_company_profile(
 @router.get("/quota", response_model=QuotaStatus)
 def get_company_quota(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """查看公司配額狀態"""
-    _ensure_owner_admin(current_user)
     status_data = crud_tenant.get_quota_status(db, current_user.tenant_id)
     if not status_data:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -208,10 +195,9 @@ def list_company_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """列出公司所有使用者"""
-    _ensure_owner_admin(current_user)
     q = db.query(User).filter(User.tenant_id == current_user.tenant_id)
     if role:
         q = q.filter(User.role == role)
@@ -235,13 +221,12 @@ def list_company_users(
 def invite_user(
     invite: InviteUserRequest,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """
     邀請（建立）新使用者到自己公司
     Owner/Admin 限定
     """
-    _ensure_owner_admin(current_user)
 
     # 配額檢查
     quota = crud_tenant.check_quota(db, current_user.tenant_id, "user")
@@ -290,10 +275,9 @@ def update_company_user(
     user_id: UUID,
     update: UpdateUserRequest,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """更新公司使用者角色/狀態"""
-    _ensure_owner_admin(current_user)
 
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
@@ -328,10 +312,9 @@ def update_company_user(
 def deactivate_company_user(
     user_id: UUID,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """停用公司使用者（軟刪除）"""
-    _ensure_owner_admin(current_user)
 
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
@@ -359,10 +342,9 @@ def company_usage_summary(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """查看公司用量摘要"""
-    _ensure_owner_admin(current_user)
     from app.crud.crud_audit import get_usage_summary
     from datetime import datetime as dt
 
@@ -378,10 +360,9 @@ def company_usage_summary(
 @router.get("/usage/by-user")
 def company_usage_by_user(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """查看每位使用者的用量"""
-    _ensure_owner_admin(current_user)
     tid = current_user.tenant_id
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -419,10 +400,9 @@ def company_usage_by_user(
 @router.get("/branding", response_model=BrandingSettings)
 def get_branding(
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """取得公司品牌設定"""
-    _ensure_owner_admin(current_user)
     tenant = crud_tenant.get(db, current_user.tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -439,10 +419,9 @@ def get_branding(
 def update_branding(
     branding: BrandingSettings,
     db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_admin),
 ) -> Any:
     """更新公司品牌設定（白標）"""
-    _ensure_owner_admin(current_user)
 
     # Only pro / enterprise plans can customize branding
     tenant = crud_tenant.get(db, current_user.tenant_id)

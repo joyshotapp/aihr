@@ -13,11 +13,20 @@ import SSOCallbackPage from './pages/SSOCallbackPage'
 import SSOSettingsPage from './pages/SSOSettingsPage'
 import BrandingPage from './pages/BrandingPage'
 import SubscriptionPage from './pages/SubscriptionPage'
+import CustomDomainsPage from './pages/CustomDomainsPage'
+import RegionsPage from './pages/RegionsPage'
+import MyUsagePage from './pages/MyUsagePage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
   if (loading) return <div className="flex h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" /></div>
   if (!token) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function RoleGuard({ children, roles }: { children: React.ReactNode; roles: string[] }) {
+  const { user } = useAuth()
+  if (!user || !roles.includes(user.role)) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -30,13 +39,16 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<ChatPage />} />
         <Route path="documents" element={<DocumentsPage />} />
-        <Route path="usage" element={<UsagePage />} />
-        <Route path="audit" element={<AuditLogsPage />} />
-        <Route path="departments" element={<DepartmentsPage />} />
-        <Route path="company" element={<CompanyPage />} />
-        <Route path="sso-settings" element={<SSOSettingsPage />} />
-        <Route path="branding" element={<BrandingPage />} />
-        <Route path="subscription" element={<SubscriptionPage />} />
+        <Route path="my-usage" element={<MyUsagePage />} />
+        <Route path="usage" element={<RoleGuard roles={['owner', 'admin']}><UsagePage /></RoleGuard>} />
+        <Route path="audit" element={<RoleGuard roles={['owner', 'admin']}><AuditLogsPage /></RoleGuard>} />
+        <Route path="departments" element={<RoleGuard roles={['owner', 'admin', 'hr']}><DepartmentsPage /></RoleGuard>} />
+        <Route path="company" element={<RoleGuard roles={['owner', 'admin']}><CompanyPage /></RoleGuard>} />
+        <Route path="sso-settings" element={<RoleGuard roles={['owner', 'admin']}><SSOSettingsPage /></RoleGuard>} />
+        <Route path="branding" element={<RoleGuard roles={['owner', 'admin']}><BrandingPage /></RoleGuard>} />
+        <Route path="subscription" element={<RoleGuard roles={['owner', 'admin']}><SubscriptionPage /></RoleGuard>} />
+        <Route path="custom-domains" element={<RoleGuard roles={['owner', 'admin']}><CustomDomainsPage /></RoleGuard>} />
+        <Route path="regions" element={<RegionsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

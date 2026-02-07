@@ -42,7 +42,7 @@ export const authApi = {
 
 // ─── Documents ───
 export const docApi = {
-  list: () => api.get<Document[]>('/documents/').then(r => r.data),
+  list: (params?: { department_id?: string }) => api.get<Document[]>('/documents/', { params }).then(r => r.data),
   get: (id: string) => api.get<Document>(`/documents/${id}`).then(r => r.data),
   upload: (file: File, onProgress?: (pct: number) => void) => {
     const form = new FormData()
@@ -116,6 +116,9 @@ export const ssoApi = {
   /** Public: get enabled providers for a tenant (no auth required) */
   providers: (tenantId: string) =>
     api.get<{ provider: string; enabled: boolean }[]>(`/auth/sso/providers/${tenantId}`).then(r => r.data),
+  /** Public: auto-discover tenant + SSO providers by email domain */
+  discover: (email: string) =>
+    api.post<{ tenant_id: string; tenant_name: string; providers: { provider: string; client_id: string }[] }>('/auth/sso/discover', { email }).then(r => r.data),
   /** Public: create signed OAuth state */
   state: (body: { tenant_id: string; provider: string }) =>
     api.post<{ state: string }>('/auth/sso/state', body).then(r => r.data),

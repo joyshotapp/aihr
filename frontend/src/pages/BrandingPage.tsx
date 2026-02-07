@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { companyApi } from '../api'
-import { Palette, Save, Eye } from 'lucide-react'
+import { Palette, Save, Eye, MessageSquare, LayoutDashboard } from 'lucide-react'
 
 interface BrandingData {
   brand_name: string
@@ -38,7 +38,7 @@ export default function BrandingPage() {
     setMsg('')
     try {
       await companyApi.updateBranding(form)
-      setMsg('品牌設定已儲存，重新整理頁面即可看到變更。')
+      setMsg('品牌設定已儲存成功！下次載入時將套用新設定。')
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || '儲存失敗')
     } finally {
@@ -135,18 +135,47 @@ export default function BrandingPage() {
             />
           </div>
 
-          {/* Preview */}
+          {/* Live Preview */}
           <div className="rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">預覽</h3>
-            <div className="flex items-center gap-3 rounded-lg border border-gray-100 p-3">
-              {form.brand_logo_url ? (
-                <img src={form.brand_logo_url} alt="Preview" className="h-8 w-8 object-contain" />
-              ) : (
-                <div className="h-8 w-8 rounded" style={{ backgroundColor: form.brand_primary_color }} />
-              )}
-              <span className="text-lg font-bold" style={{ color: form.brand_primary_color }}>
-                {form.brand_name || 'UniHR'}
-              </span>
+            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Eye className="h-4 w-4" /> 即時預覽
+            </h3>
+
+            {/* Sidebar preview */}
+            <div className="flex rounded-lg border border-gray-100 overflow-hidden" style={{ height: 200 }}>
+              <div className="w-48 p-3 text-white flex flex-col" style={{ backgroundColor: form.brand_primary_color }}>
+                <div className="flex items-center gap-2 mb-4">
+                  {form.brand_logo_url ? (
+                    <img src={form.brand_logo_url} alt="Logo" className="h-6 w-6 object-contain rounded" />
+                  ) : (
+                    <div className="h-6 w-6 rounded bg-white/20" />
+                  )}
+                  <span className="text-sm font-bold truncate">{form.brand_name || 'UniHR'}</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-center gap-2 rounded px-2 py-1.5 bg-white/20">
+                    <LayoutDashboard className="h-3 w-3" /> 儀表板
+                  </div>
+                  <div className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-white/10">
+                    <MessageSquare className="h-3 w-3" /> AI 問答
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 bg-gray-50 p-4">
+                <div className="h-3 w-32 rounded bg-gray-200 mb-2" />
+                <div className="h-2 w-48 rounded bg-gray-100 mb-4" />
+                <div className="grid grid-cols-3 gap-2">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="rounded-lg border border-gray-200 bg-white p-2">
+                      <div className="h-2 w-12 rounded mb-1" style={{ backgroundColor: form.brand_primary_color, opacity: 0.6 }} />
+                      <div className="h-4 w-8 rounded bg-gray-200" />
+                    </div>
+                  ))}
+                </div>
+                <button className="mt-3 rounded px-3 py-1 text-xs text-white" style={{ backgroundColor: form.brand_secondary_color }}>
+                  按鈕樣式
+                </button>
+              </div>
             </div>
           </div>
 

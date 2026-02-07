@@ -27,6 +27,7 @@ export interface Document {
   status: string // uploading | parsing | embedding | completed | failed
   tenant_id: string
   uploaded_by: string | null
+  department_id: string | null
   file_size: number | null
   chunk_count: number | null
   error_message: string | null

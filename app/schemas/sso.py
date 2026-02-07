@@ -63,3 +63,20 @@ class SSOStateRequest(BaseModel):
 
 class SSOStateResponse(BaseModel):
     state: str
+
+
+# ─── SSO Discovery (auto-detect tenant by email domain) ───
+
+class SSODiscoverRequest(BaseModel):
+    email: str = Field(..., description="User's work email for domain-based tenant discovery")
+
+
+class SSODiscoverProvider(BaseModel):
+    provider: str
+    client_id: str
+
+
+class SSODiscoverResponse(BaseModel):
+    tenant_id: UUID
+    tenant_name: str
+    providers: List[SSODiscoverProvider]
