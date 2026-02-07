@@ -52,7 +52,7 @@
 ### 1.1 現況（已存在）
 - 你目前有一套可運作的「勞資法 AI 問答」：
   - Flask + Gunicorn + Nginx（Linux 伺服器）
-  - RAG 管線：向量檢索（Pinecone）+ 生成（OpenAI）+ 法律向量模型（Voyage）
+  - RAG 管線：向量檢索（pgvector）+ 生成（OpenAI）+ 向量模型（Voyage）
   - 特點：12 份「專家驗證」文件可用高權重確保命中與品質（你已建立最佳化手段）
 
 ### 1.2 你想解決的問題
@@ -121,7 +121,7 @@
   → 自動建立：
      - Tenant（公司空間）
      - Owner 帳號（最高管理者）
-     - 空的公司知識庫（Pinecone index 預建立）
+     - 空的公司知識庫（pgvector 表空間自動建立）
   → 導向 Onboarding 引導頁
 ```
 
@@ -328,7 +328,7 @@ Onboarding 步驟：
       +--> Pinecone (shared labor-law index)
 
 [SaaS Web/API]
-  +--> Pinecone (per-tenant index or per-tenant project)
+  +--> pgvector (PostgreSQL, per-tenant SQL 隔離)
   +--> Relational DB (tenants/users/docs/conversations/audit)
   +--> Object Storage (原始文件、切片中間檔)
 ```
@@ -361,23 +361,16 @@ Onboarding 步驟：
 - 任何跨租戶資料存取都必須被視為重大資安事件
 - 稽核記錄必須可追溯：誰、何時、問了什麼、用了哪些來源、回了什麼
 
-### 5.2 向量資料隔離策略（從強到弱）
+### 5.2 向量資料隔離策略
 
-**A. 最安全：每租戶獨立 Pinecone 專案/帳號**
-- 優點：隔離最徹底，權限/金鑰天然分離
-- 缺點：營運成本與管理複雜度較高
-- 適合：中大型企業、資安要求高
+**採用方案：pgvector + SQL WHERE tenant_id**
+- 向量直接儲存在 PostgreSQL（pgvector 擴充）
+- 每筆 DocumentChunk 包含 `tenant_id` 欄位
+- 查詢時透過 SQL `WHERE tenant_id = ?` 確保隔離
+- HNSW 索引加速近似最近鄰搜尋
+- 優點：無 index 數量限制、統一技術栈、簡化營運
 
-**B. 推薦平衡：每租戶獨立 Pinecone Index（同一專案）**
-- 優點：隔離強、管理可控、成本較好
-- 缺點：Index 數量增加需規劃命名、生命周期
-- 適合：大多數 B2B SaaS
-
-**C. 不建議作為唯一隔離：同一 Index + namespace**
-- 風險：一旦程式 bug 或權限誤設，可能讀到別家公司資料
-- 可用：做「加速」或「輔助分類」可以，但不應作為唯一安全邊界
-
-> 結論：公司內規 KB 建議採用 **B**（Index per tenant）起步；對高敏感客戶提供 **A**（Project/Account per tenant）升級方案。
+> 說明：已從原本的 Pinecone per-tenant index 遷移至 pgvector，消除了 Pinecone 免費版 5 index 限制、標準版 20 index 限制的擴展性問題。
 
 ### 5.3 其他安全要點
 - SaaS → Core 之間採「服務對服務」認證（建議：mTLS 或簽章 token），禁止前端直接呼叫 Core
@@ -452,7 +445,7 @@ Onboarding 步驟：
 - audit_logs
   - id, tenant_id, actor_user_id, action, target_type, target_id, ip, created_at, detail_json
 - usage_records（成本追蹤核心表）
-  - id, tenant_id, user_id, action_type(chat/embed/index), input_tokens, output_tokens, pinecone_queries, embedding_calls, latency_ms, estimated_cost_usd, created_at
+  - id, tenant_id, user_id, action_type(chat/embed/index), input_tokens, output_tokens, vector_queries, embedding_calls, latency_ms, estimated_cost_usd, created_at
 
 ### 8.2 Object Storage
 - 原始文件：PDF/DOCX/HTML
@@ -499,7 +492,7 @@ Onboarding 步驟：
 **GET /v1/usage?from=&to=&group_by=tenant|day|action**
 - Response
   - total_input_tokens, total_output_tokens
-  - total_pinecone_queries
+  - total_vector_queries
   - total_embedding_calls
   - estimated_cost_usd
   - breakdown: [{ tenant_id, period, ...同上欄位 }]
@@ -540,7 +533,7 @@ Onboarding 步驟：
 - 成本監控（per-tenant 級別）：
   - 每租戶 LLM token 消耗（input / output tokens 分開記）
   - 每租戶 Core API 呼叫次數與延遲
-  - 每租戶 Pinecone query 次數（內規 KB + 共用 KB 分開記）
+  - 每租戶 pgvector query 次數（內規 KB + 共用 KB 分開記）
   - 每租戶文件向量化成本（embedding API 呼叫次數 × 單價）
   - 彙總報表：每日/每週/每月，可依租戶、時段、功能拆分
   - 用途：內部成本分析、定價策略參考、異常偵測（某租戶突然暴增）
@@ -655,8 +648,8 @@ SaaS 系統**不需要複製或修改 Core 的任何程式碼**，只需透過 H
 | WSGI Server | Gunicorn | 多 worker、180s timeout |
 | Reverse Proxy | Nginx | 前端 proxy，監聽 80/443 |
 | LLM | OpenAI GPT-4o | 回答生成 |
-| Embeddings | Voyage-law-2 | 法律專用向量模型，1024 維 |
-| Vector DB | Pinecone (unihr-legal-v3) | 3,185+ 向量，35+ 台灣勞動法 |
+| Embeddings | Voyage-4-lite | 通用向量模型，1024 維，良好中文支援 |
+| Vector DB | pgvector (PostgreSQL) | HNSW 索引，向量與資料統一儲存 |
 | 專家文檔 | 12 份律師驗證文件 | 權重 +1000 確保命中 |
 | 知識圖譜 | JSON-based KG | 法規關聯與查詢增強 |
 | 查詢分類 | QueryClassifier | 區分勞資/非勞資/問候/特休等 |
@@ -791,7 +784,7 @@ unihr-saas/
 │  ├── FastAPI :8000                          │
 │  ├── PostgreSQL :5432                       │
 │  ├── Redis :6379                            │
-│  └── Pinecone (per-tenant index)            │
+│  └── pgvector (PostgreSQL, 向量資料)       │
 └──────────────────┬──────────────────────────┘
                    │
               [瀏覽器/App]
@@ -865,9 +858,9 @@ unihr-saas/
 ### 17.4 文件處理 Pipeline（技術方向）
 
 ```
-上傳 → 格式偵測 → 解析 → 品質檢查 → 切片 → Embedding → Pinecone
+上傳 → 格式偵測 → 解析 → 品質檢查 → 切片 → Embedding → pgvector
                                                          ↓
-                                                   tenant-{id}-kb index
+                                                   DocumentChunk (tenant_id 隔離)
 ```
 
 **各階段細節：**
@@ -887,8 +880,8 @@ unihr-saas/
    - 固定長度 800~1200 tokens + 重疊 100~200 tokens
    - 盡量在段落/章節邊界切（依標題、換行、分隔線）
    - 每個 chunk 保留 metadata：document_id、page_number、section_title
-5. **Embedding**：Voyage-law-2（與 Core 同模型，確保語義空間一致）
-6. **寫入**：tenant 專屬 Pinecone index
+5. **Embedding**：Voyage-4-lite（通用多語言模型，良好中文支援，$0.02/1M tokens）
+6. **寫入**：pgvector（PostgreSQL DocumentChunk 表，tenant_id 隔離）
 
 ### 17.5 MVP vs 後續的切分建議
 
@@ -978,7 +971,7 @@ unihr-saas/
 
 - ✅ **T1-4** Tenant Service
   - 建立公司、啟停用
-  - 建立 tenant 專屬 Pinecone index（命名規則：`tenant-{tenant_id}-kb`）
+  - 建立 tenant 專屬 pgvector 向量空間（透過 SQL `WHERE tenant_id` 隔離）
   - Tenant 配額設定（query 上限 / token 上限）
 
 #### 1B. 文件與知識庫（第 2~3 週）
@@ -989,15 +982,15 @@ unihr-saas/
   - 文件解析（pypdf, python-docx, lxml）
   - 品質檢查（掃描偵測、亂碼偵測、空白頁偵測）
   - 文字切片（800~1200 tokens, 重疊 100~200 tokens，段落邊界優先）
-  - 背景任務：切片 → Voyage embedding → 寫入 tenant Pinecone index
+  - 背景任務：切片 → Voyage embedding → 寫入 pgvector
   - 處理狀態追蹤：上傳中 → 解析中 → 向量化中 → 完成/失敗
   - 失敗原因回饋（加密 PDF、掃描圖片等）
-  - 文件刪除（同步刪除 Pinecone 中對應向量）
+  - 文件刪除（同步刪除 pgvector 中對應向量）
   - 版本管理：上傳新版時停用舊版向量
   - 文件清單與狀態查詢 API
 
 - ✅ **T1-6** 內規知識庫檢索
-  - 查詢 tenant 專屬 Pinecone index
+  - 查詢 tenant 專屬 pgvector 向量資料
   - 回傳 top-k 結果 + 來源文件名/段落
   - 確保：查詢時一定帶 tenant 專屬 index name，不會誤查到其他公司
 
@@ -1030,7 +1023,7 @@ unihr-saas/
   - API：查詢稽核紀錄（依時間/使用者/操作類型）
 
 - ✅ **T1-11** Usage & Cost Tracking
-  - 每次問答記錄：input_tokens, output_tokens, pinecone_queries, embedding_calls
+  - 每次問答記錄：input_tokens, output_tokens, vector_queries, embedding_calls
   - 從 Core response 的 `usage` 欄位擷取 token 數
   - 成本估算公式：`estimated_cost = input_tokens × rate + output_tokens × rate + ...`
   - API：查詢用量報表（依租戶/時段/操作類型彙總）
@@ -1057,7 +1050,7 @@ unihr-saas/
   - 文件上傳管理頁（拖放上傳、進度顯示、狀態追蹤、清單、刪除）
   - 文件品質回饋顯示（成功/解析中/向量化中/失敗 + 自動輪詢）
   - 回答來源標示（📋 公司內規 / ⚖️ 勞動法規）
-  - 用量儀表板（總操作數、Token 用量、Pinecone 查詢、成本統計、按類型分佈）
+  - 用量儀表板（總操作數、Token 用量、向量查詢、成本統計、按類型分佈）
   - 技術棧：React + TypeScript + Vite + TailwindCSS + Axios
 
 ---
@@ -1321,7 +1314,7 @@ unihr-saas/
   - 每個區域獨立的：
     - PostgreSQL 實例（資料不出區域）
     - Redis 實例
-    - Pinecone index（或指定 region）
+    - pgvector（向量資料儲存在 PostgreSQL 內，隨資料庫一同遷移）
     - Celery Worker
   - API Gateway 路由層根據 tenant region 轉發至對應區域服務
   - 跨區域共用：僅 Admin 平台管理台（讀取各區域資料的聚合視圖）
@@ -1488,7 +1481,7 @@ Phase 4 (生產化) ✅ 已完成
 - PostgreSQL 15 + SQLAlchemy 2.0（含效能調優）
 - Redis 7 + Celery 5.3
 - JWT 認證 + RBAC 權限
-- Pinecone 向量資料庫
+- pgvector 向量資料庫（PostgreSQL 擴充）
 - Voyage AI Embeddings + Reranking
 
 **前端**

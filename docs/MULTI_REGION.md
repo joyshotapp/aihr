@@ -6,7 +6,7 @@ UniHR 支援多區域部署，確保客戶資料落地在其要求的地理區�
 
 - **PostgreSQL 資料庫** — 租戶資料、使用者資料、對話記錄完全隔離
 - **Redis 快取** — Session、Rate Limit、暫存資料
-- **Pinecone 向量索引** — 知識庫向量資料
+- **pgvector 向量索引** — 知識庫向量資料（儲存在 PostgreSQL 中）
 - **Celery Worker** — 文件處理佇列
 
 ## 2. 支援區域
@@ -30,7 +30,7 @@ UniHR 支援多區域部署，確保客戶資料落地在其要求的地理區�
 - 稽核日誌 (audit_logs)
 - 用量記錄 (usage_records)
 - SSO 設定 (tenant_sso_configs)
-- 向量嵌入 (Pinecone index)
+- 向量嵌入 (pgvector, 儲存在 PostgreSQL 內)
 
 ### 3.2 跨區域共用的資料
 以下資料為 **平台級管理**，僅存在於主控區域：
@@ -97,7 +97,7 @@ docker compose -f docker-compose.prod.yml up -d admin-api admin-frontend
 2. **資料匯出** — 從原區域匯出租戶所有資料
 3. **更新區域** — 呼叫 `PUT /api/v1/regions/tenants/{id}/region`
 4. **資料匯入** — 匯入新區域資料庫
-5. **向量遷移** — 將 Pinecone 向量從原區域 index 遷移至新區域
+5. **向量遷移** — 將 pgvector 向量資料從原區域資料庫遷移至新區域
 6. **DNS 更新** — 更新自訂域名（若有）指向新區域
 7. **驗證** — 確認所有功能正常運作
 8. **原區域清除** — 確認無誤後刪除原區域資料
@@ -113,7 +113,7 @@ docker compose -f docker-compose.prod.yml up -d admin-api admin-frontend
 | 被遺忘權 | 提供租戶/使用者資料完全刪除功能 |
 | 資料不出境 | EU 區域所有資料儲存在 europe-west1 |
 | 加密傳輸 | 所有 API 強制 TLS 1.2+ |
-| 靜態加密 | PostgreSQL 磁碟加密、Pinecone 服務端加密 |
+| 靜態加密 | PostgreSQL 磁碟加密（向量資料內含在 PostgreSQL 中） |
 
 ## 7. 監控與告警
 

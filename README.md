@@ -39,7 +39,7 @@ UniHR 採用**雙層架構**：
 ## 核心功能
 
 ### 多租戶管理
-- 每家公司擁有獨立的空間、資料庫記錄與向量索引（Pinecone per-tenant namespace）
+- 每家公司擁有獨立的空間、資料庫記錄與向量索引（pgvector per-tenant SQL 隔離）
 - Row-Level Security + 中間層隔離，確保企業間資料零交叉
 - 租戶配額管理（儲存空間、文件數量、每月查詢次數、Token 用量上限）
 
@@ -50,7 +50,7 @@ UniHR 採用**雙層架構**：
 - 前端 RoleGuard 路由守衛 + 後端統一 DI 權限檢查
 
 ### 企業知識庫
-- 文件上傳 → 解析 → 切片 → 向量化 → 存入 Pinecone，全流程背景處理（Celery）
+- 文件上傳 → 解析 → 切片 → 向量化 → 存入 pgvector（PostgreSQL），全流程背景處理（Celery）
 - 支援 **19 種檔案格式**（詳見[文件處理引擎](#文件處理引擎)）
 - 品質報告系統：每份文件自動評估解析品質（excellent / good / fair / poor / failed）
 
@@ -96,9 +96,9 @@ UniHR 採用**雙層架構**：
 └────────────│─────────────────│──────────────────────────────┘
              │                 │
      ┌───────▼───────┐  ┌─────▼──────┐
-     │   Pinecone    │  │   Celery   │
-     │  Vector DB    │  │   Worker   │
-     │(per-tenant)   │  │ (bg tasks) │
+     │  pgvector     │  │   Celery   │
+     │ (PostgreSQL)  │  │   Worker   │
+     │  HNSW index   │  │ (bg tasks) │
      └───────────────┘  └─────┬──────┘
                               │
 ┌─────────────┐  ┌────────────▼──┐  ┌────────────┐
@@ -122,8 +122,8 @@ UniHR 採用**雙層架構**：
 | 資料庫 | PostgreSQL | 15 |
 | 快取 / 訊息佇列 | Redis | 7 |
 | 背景任務 | Celery | 5.3.6 |
-| 向量資料庫 | Pinecone | 3.1.0 |
-| Embedding 模型 | Voyage AI (`voyage-law-2`, 1024 維) | 0.2.1 |
+| 向量資料庫 | pgvector（PostgreSQL 擴充，HNSW 索引） | 0.3.0+ |
+| Embedding 模型 | Voyage AI (`voyage-4-lite`, 1024 維) | 0.3.7 |
 | LLM | OpenAI GPT | 1.12.0 |
 | 認證 | JWT (python-jose) + OAuth 2.0 SSO | — |
 
@@ -219,14 +219,14 @@ G. 企業覆蓋率    ███████████████████�
 
 | 模式 | 說明 | 適用場景 |
 |------|------|----------|
-| `semantic` | Pinecone 向量餘弦相似度 | 語意理解、概念匹配 |
+| `semantic` | pgvector 向量餘弦相似度（cosine distance） | 語意理解、概念匹配 |
 | `keyword` | BM25Okapi 關鍵字匹配 | 精確詞彙、編號、法條查詢 |
 | `hybrid`（預設） | 語意 + BM25 + RRF 融合 | 通用場景，兼顧語意與關鍵字 |
 
 ### 管線流程
 
 ```
-查詢 → ┬─ 語意檢索 (Pinecone + Voyage Embedding)
+查詢 → ┬─ 語意檢索 (pgvector + Voyage Embedding)
        └─ BM25 關鍵字檢索 (PostgreSQL chunks)
               ↓
        RRF 融合排序 (score = Σ 1/(k + rank), k=60)
@@ -253,7 +253,7 @@ G. 企業覆蓋率    ███████████████████�
 | 層級 | 隔離方式 |
 |------|----------|
 | 資料庫 | 所有表含 `tenant_id`，JOIN/WHERE 強制過濾 |
-| 向量資料庫 | Pinecone 每租戶獨立 index（`tenant-{id}-kb`） |
+| 向量資料庫 | pgvector（PostgreSQL 擴充），透過 SQL `WHERE tenant_id` 隔離 |
 | 檔案儲存 | 上傳目錄以 `tenant_id` 分隔 |
 | API | 中間層從 JWT token 提取 `tenant_id`，注入所有查詢 |
 | 快取 | Redis cache key 包含 `tenant_id`，不可跨租戶讀取 |
@@ -421,7 +421,7 @@ FastAPI metrics → Prometheus (scrape) → Grafana (dashboard)
 ```bash
 # 1. 複製環境變數
 cp .env.example .env
-# 編輯 .env 填入 API keys（OPENAI / VOYAGE / PINECONE）
+# 編輯 .env 填入 API keys（OPENAI / VOYAGE）
 
 # 2. 啟動所有服務
 make dev
@@ -487,7 +487,7 @@ uvicorn main:app --reload --port 8001
 | `SECRET_KEY` | JWT 簽名密鑰 | ✅ | — |
 | `OPENAI_API_KEY` | OpenAI API Key | ✅ | — |
 | `VOYAGE_API_KEY` | Voyage AI（Embedding + Rerank） | ✅ | — |
-| `PINECONE_API_KEY` | Pinecone 向量資料庫 | ✅ | — |
+| `EMBEDDING_DIMENSION` | 向量維度 | — | `1024` |
 | `POSTGRES_SERVER` | PostgreSQL 主機 | — | `localhost` |
 | `POSTGRES_USER` | 資料庫使用者 | — | `postgres` |
 | `POSTGRES_PASSWORD` | 資料庫密碼 | — | `postgres` |

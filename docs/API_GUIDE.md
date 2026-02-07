@@ -201,6 +201,6 @@ print(tenants)
 
 接下來可以開發的功能：
 1. 文檔上傳與管理 (S3/MinIO)
-2. RAG 檢索系統 (Pinecone + OpenAI)
+2. RAG 檢索系統 (pgvector + OpenAI)
 3. 對話管理
 4. 使用量追蹤與計費
