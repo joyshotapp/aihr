@@ -4,10 +4,11 @@ import aiofiles
 from typing import Any, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.api.deps_permissions import check_document_permission
+from app.api.deps_permissions import check_document_permission, can_access_document_by_department
 from app.crud import crud_document
 from app.models.user import User
 from app.models.document import Document as DocumentModel
@@ -31,6 +32,11 @@ def list_documents(
     獲取當前租戶的文件列表，可依部門篩選
     """
     if department_id:
+        if not can_access_document_by_department(current_user, department_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="無權限存取此部門的文件",
+            )
         documents = (
             db.query(DocumentModel)
             .filter(
@@ -43,9 +49,27 @@ def list_documents(
             .all()
         )
     else:
-        documents = crud_document.get_by_tenant(
-            db, tenant_id=current_user.tenant_id, skip=skip, limit=limit
-        )
+        if current_user.is_superuser or current_user.role in ["owner", "admin", "hr"]:
+            documents = crud_document.get_by_tenant(
+                db, tenant_id=current_user.tenant_id, skip=skip, limit=limit
+            )
+        else:
+            q = db.query(DocumentModel).filter(DocumentModel.tenant_id == current_user.tenant_id)
+            if current_user.department_id is None:
+                q = q.filter(DocumentModel.department_id.is_(None))
+            else:
+                q = q.filter(
+                    or_(
+                        DocumentModel.department_id.is_(None),
+                        DocumentModel.department_id == current_user.department_id,
+                    )
+                )
+            documents = (
+                q.order_by(DocumentModel.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
     return documents
 
 

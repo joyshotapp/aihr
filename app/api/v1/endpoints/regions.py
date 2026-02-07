@@ -76,13 +76,16 @@ async def list_regions():
 
 
 @router.get("/current")
-async def get_current_region():
-    """取得本機所在區域"""
-    import os
-    local = os.getenv("LOCAL_REGION", DEFAULT_REGION)
-    config = get_region_config(local)
+async def get_current_region(
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """取得當前租戶所在區域"""
+    tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
+    region = getattr(tenant, "region", DEFAULT_REGION) if tenant else DEFAULT_REGION
+    config = get_region_config(region)
     return {
-        "region": local,
+        "region": region,
         "name": config.name,
         "display_name_zh": config.display_name_zh,
     }

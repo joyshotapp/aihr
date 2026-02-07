@@ -189,24 +189,26 @@ def discover_sso_by_email(
     domain = email.split("@")[-1]
 
     # Find enabled SSO configs whose allowed_domains contain this domain
-    all_configs = (
+    matching = (
         db.query(TenantSSOConfig)
-        .filter(TenantSSOConfig.enabled == True)
+        .filter(
+            TenantSSOConfig.enabled == True,
+            TenantSSOConfig.allowed_domains != None,
+            TenantSSOConfig.allowed_domains.contains([domain]),
+        )
         .all()
     )
-
-    matching = [cfg for cfg in all_configs if cfg.allowed_domains and domain in cfg.allowed_domains]
 
     if not matching:
         raise HTTPException(
             status_code=404,
-            detail=f"找不到 {domain} 對應的 SSO 設定，請聯絡管理員。",
+            detail="無法使用 SSO 登入，請聯絡管理員。",
         )
 
     # Group by first matching tenant
     tenant_id = matching[0].tenant_id
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-    tenant_name = tenant.name if tenant else "Unknown"
+    tenant_name = "已識別組織"
 
     providers = [
         SSODiscoverProvider(provider=cfg.provider, client_id=cfg.client_id)

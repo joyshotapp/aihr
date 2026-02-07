@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.api.deps_permissions import require_superuser
 from app.crud import crud_tenant
 from app.models.user import User
 from app.schemas.tenant import Tenant, TenantCreate, TenantUpdate
@@ -17,16 +18,11 @@ def read_tenants(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
     limit: int = 100,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_superuser),
 ) -> Any:
     """
     獲取租戶列表（僅限 superuser）
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     tenants = crud_tenant.get_multi(db, skip=skip, limit=limit)
     return tenants
 
@@ -36,16 +32,11 @@ def create_tenant(
     *,
     db: Session = Depends(deps.get_db),
     tenant_in: TenantCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_superuser),
 ) -> Any:
     """
     建立新租戶（僅限 superuser）
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     tenant = crud_tenant.get_by_name(db, name=tenant_in.name)
     if tenant:
         raise HTTPException(
@@ -87,16 +78,11 @@ def update_tenant(
     db: Session = Depends(deps.get_db),
     tenant_id: UUID,
     tenant_in: TenantUpdate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(require_superuser),
 ) -> Any:
     """
     更新租戶資訊（僅限 superuser）
     """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
     tenant = crud_tenant.get(db, tenant_id=tenant_id)
     if not tenant:
         raise HTTPException(
