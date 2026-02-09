@@ -36,7 +36,6 @@ export default function ChatPage() {
   // T7-13: search
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
-  const [searching, setSearching] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -227,14 +226,11 @@ export default function ChatPage() {
       setSearchResults(null)
       return
     }
-    setSearching(true)
     try {
       const results = await chatApi.searchConversations(q)
       setSearchResults(results)
     } catch {
       toast.error('搜尋失敗')
-    } finally {
-      setSearching(false)
     }
   }
 
