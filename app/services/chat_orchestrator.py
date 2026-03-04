@@ -58,14 +58,79 @@ class ChatOrchestrator:
     def __init__(self):
         self.kb_retriever = KnowledgeBaseRetriever()
         self.core_client = CoreAPIClient()
+        self._llm_backend = getattr(settings, "LLM_BACKEND", "openai").strip().lower()
+        self._llm_available = False
+        self._source_priority_mode = getattr(settings, "SOURCE_PRIORITY_MODE", "adaptive")
+        self._policy_source_weight = float(getattr(settings, "POLICY_SOURCE_WEIGHT", 0.65))
+        self._law_source_weight = float(getattr(settings, "LAW_SOURCE_WEIGHT", 0.35))
+        self._conflict_resolution_mode = getattr(settings, "CONFLICT_RESOLUTION_MODE", "legal_floor")
 
         # OpenAI client (sync + async)
         self._openai = None
         self._openai_async = None
-        openai_key = getattr(settings, "OPENAI_API_KEY", "")
-        if _HAS_OPENAI and openai_key:
-            self._openai = openai_lib.OpenAI(api_key=openai_key)
-            self._openai_async = openai_lib.AsyncOpenAI(api_key=openai_key)
+        if self._llm_backend in ("openai", "ollama"):
+            if _HAS_OPENAI:
+                if self._llm_backend == "ollama":
+                    ollama_base = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+                    ollama_api_key = getattr(settings, "OLLAMA_API_KEY", "ollama") or "ollama"
+                    self._openai = openai_lib.OpenAI(api_key=ollama_api_key, base_url=f"{ollama_base}/v1")
+                    self._openai_async = openai_lib.AsyncOpenAI(api_key=ollama_api_key, base_url=f"{ollama_base}/v1")
+                    self._llm_available = True
+                else:
+                    openai_key = getattr(settings, "OPENAI_API_KEY", "")
+                    if openai_key:
+                        self._openai = openai_lib.OpenAI(api_key=openai_key)
+                        self._openai_async = openai_lib.AsyncOpenAI(api_key=openai_key)
+                        self._llm_available = True
+                    else:
+                        logger.warning("LLM_BACKEND=openai 但 OPENAI_API_KEY 未設定，將回退到模板回答")
+            else:
+                logger.warning("缺少 openai 套件，無法使用 openai/ollama backend，將回退到模板回答")
+        elif self._llm_backend == "core":
+            self._llm_available = True
+        else:
+            logger.warning(f"未知 LLM_BACKEND={self._llm_backend}，將回退到模板回答")
+
+    def _model_name(self) -> str:
+        if self._llm_backend == "ollama":
+            return getattr(settings, "OLLAMA_MODEL", "gemma3:27b")
+        return getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+
+    @staticmethod
+    def _messages_to_core_prompt(messages: List[Dict[str, str]]) -> str:
+        prompt_parts: List[str] = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            prompt_parts.append(f"[{role}]\n{content}")
+        return "\n\n".join(prompt_parts)
+
+    async def _llm_generate_async(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float,
+        max_tokens: int,
+    ) -> str:
+        if self._llm_backend in ("openai", "ollama") and self._openai_async:
+            response = await self._openai_async.chat.completions.create(
+                model=self._model_name(),
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content.strip()
+
+        if self._llm_backend == "core":
+            core_prompt = self._messages_to_core_prompt(messages)
+            core_resp = await self.core_client.chat(question=core_prompt, request_id=str(uuid.uuid4()))
+            if core_resp.get("status") == "error":
+                raise RuntimeError(core_resp.get("error") or "core generation failed")
+            answer = core_resp.get("answer") or core_resp.get("message") or ""
+            if not answer:
+                answer = json.dumps(core_resp, ensure_ascii=False)
+            return answer.strip()
+
+        raise RuntimeError("LLM backend unavailable")
 
     # ──────────── T7-0: 檢索層（與生成解耦） ────────────
 
@@ -218,6 +283,11 @@ class ChatOrchestrator:
         has_labor_law = (
             labor_law.get("status") != "error" and labor_law.get("answer")
         )
+        arbitration = self._decide_source_arbitration(
+            question=question,
+            has_policy=has_policy,
+            has_labor_law=bool(has_labor_law),
+        )
 
         context: Dict[str, Any] = {
             "request_id": request_id,
@@ -228,8 +298,12 @@ class ChatOrchestrator:
             "labor_law_raw": None,
             "context_parts": [],
             "sources": [],
+            "arbitration": arbitration,
             "disclaimer": "本回答僅供參考，不構成正式法律意見。如有具體情況，請諮詢專業法律顧問。",
         }
+
+        policy_context_parts: List[str] = []
+        law_context_parts: List[str] = []
 
         if has_policy:
             top_policies = company_policy["results"][:3]
@@ -257,7 +331,7 @@ class ChatOrchestrator:
                 content = r.get("content") or ""
                 filename = r.get("filename") or ""
                 score = r.get("score") or 0
-                context["context_parts"].append(
+                policy_context_parts.append(
                     f"【公司內規 #{i}】（來源：{filename}，相關度：{score:.2f}）\n{content}"
                 )
 
@@ -323,11 +397,70 @@ class ChatOrchestrator:
                         unique_cit.append(key)
                 if unique_cit:
                     citations_text = "（法源：" + "、".join(unique_cit) + "）"
-            context["context_parts"].append(
+            law_context_parts.append(
                 f"【勞動法規】{citations_text}\n{law_text}"
             )
 
+        if arbitration["primary_source"] == "law":
+            context["context_parts"].extend(law_context_parts + policy_context_parts)
+        else:
+            context["context_parts"].extend(policy_context_parts + law_context_parts)
+
         return context
+
+    @staticmethod
+    def _clamp_weight(value: float) -> float:
+        return max(0.0, min(1.0, value))
+
+    def _decide_source_arbitration(
+        self,
+        question: str,
+        has_policy: bool,
+        has_labor_law: bool,
+    ) -> Dict[str, Any]:
+        policy_weight = self._clamp_weight(self._policy_source_weight)
+        law_weight = self._clamp_weight(self._law_source_weight)
+
+        lower_q = (question or "").lower()
+        is_legal_sensitive = any(k in lower_q for k in self._LEGAL_SENSITIVE_KEYWORDS)
+        is_policy_sensitive = any(k in lower_q for k in self._POLICY_SENSITIVE_KEYWORDS)
+
+        if is_legal_sensitive and has_labor_law:
+            law_weight = self._clamp_weight(law_weight + 0.2)
+            policy_weight = self._clamp_weight(policy_weight - 0.2)
+        elif is_policy_sensitive and has_policy:
+            policy_weight = self._clamp_weight(policy_weight + 0.2)
+            law_weight = self._clamp_weight(law_weight - 0.2)
+
+        if not has_policy and not has_labor_law:
+            primary_source = "none"
+        elif not has_policy:
+            primary_source = "law"
+        elif not has_labor_law:
+            primary_source = "policy"
+        elif self._source_priority_mode == "policy_first":
+            primary_source = "policy"
+        elif self._source_priority_mode == "law_first":
+            primary_source = "law"
+        else:
+            primary_source = "policy" if policy_weight >= law_weight else "law"
+
+        secondary_source = "none"
+        if primary_source == "policy":
+            secondary_source = "law"
+        elif primary_source == "law":
+            secondary_source = "policy"
+
+        return {
+            "priority_mode": self._source_priority_mode,
+            "conflict_mode": self._conflict_resolution_mode,
+            "policy_weight": round(policy_weight, 2),
+            "law_weight": round(law_weight, 2),
+            "primary_source": primary_source,
+            "secondary_source": secondary_source,
+            "is_legal_sensitive": is_legal_sensitive,
+            "is_policy_sensitive": is_policy_sensitive,
+        }
 
     async def stream_answer(
         self,
@@ -342,7 +475,7 @@ class ChatOrchestrator:
         yield 每個 token chunk，前端可逐字渲染。
         若 LLM 不可用，則 yield 整段 fallback。
         """
-        if not self._openai_async or not (context["has_policy"] or context["has_labor_law"]):
+        if not self._llm_available or not (context["has_policy"] or context["has_labor_law"]):
             yield self._fallback_answer(context)
             return
 
@@ -351,17 +484,25 @@ class ChatOrchestrator:
         )
 
         try:
-            response = await self._openai_async.chat.completions.create(
-                model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
-                messages=messages,
-                temperature=getattr(settings, "OPENAI_TEMPERATURE", 0.3),
-                max_tokens=getattr(settings, "OPENAI_MAX_TOKENS", 1500),
-                stream=True,
-            )
-            async for chunk in response:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+            if self._llm_backend in ("openai", "ollama") and self._openai_async:
+                response = await self._openai_async.chat.completions.create(
+                    model=self._model_name(),
+                    messages=messages,
+                    temperature=getattr(settings, "OPENAI_TEMPERATURE", 0.3),
+                    max_tokens=getattr(settings, "OPENAI_MAX_TOKENS", 1500),
+                    stream=True,
+                )
+                async for chunk in response:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+            else:
+                answer = await self._llm_generate_async(
+                    messages=messages,
+                    temperature=getattr(settings, "OPENAI_TEMPERATURE", 0.3),
+                    max_tokens=getattr(settings, "OPENAI_MAX_TOKENS", 1500),
+                )
+                yield answer
         except Exception as e:
             logger.warning(f"LLM 串流生成失敗，回退到模板: {e}")
             yield self._fallback_answer(context)
@@ -371,6 +512,14 @@ class ChatOrchestrator:
     # 需要上下文補全的代名詞／指示詞
     _CONTEXT_PRONOUNS = ("他", "她", "它", "他的", "她的", "他們", "她們",
                          "這個人", "那個人", "此人", "該員工", "同一", "上述", "前述")
+    _LEGAL_SENSITIVE_KEYWORDS = (
+        "勞基法", "法條", "違法", "合法", "罰則", "工資", "加班", "資遣", "解僱", "解雇",
+        "特休", "請假", "工時", "最低", "法定", "勞保", "健保", "職災", "職業災害",
+    )
+    _POLICY_SENSITIVE_KEYWORDS = (
+        "公司規定", "內規", "流程", "sop", "報帳", "報到", "簽核", "核銷", "表單", "制度",
+        "員工手冊", "部門", "津貼", "獎懲", "考核",
+    )
 
     async def contextualize_query(
         self, query: str, history: List[Dict[str, str]]
@@ -379,7 +528,7 @@ class ChatOrchestrator:
         用 LLM 將含代名詞/省略主詞的查詢改寫為獨立查詢。
         若歷史為空、LLM 不可用、或問題不含指代詞，直接回傳原 query。
         """
-        if not history or not self._openai_async:
+        if not history or not self._llm_available:
             return query
 
         # 智慧跳過：問題不含代名詞/指示詞時無需 LLM 改寫（節省 ~0.9s）
@@ -399,13 +548,12 @@ class ChatOrchestrator:
         ]
 
         try:
-            response = await self._openai_async.chat.completions.create(
-                model="gpt-4o-mini",
+            rewritten = await self._llm_generate_async(
                 messages=messages,
                 temperature=0,
                 max_tokens=200,
             )
-            return response.choices[0].message.content.strip()
+            return rewritten
         except Exception as e:
             logger.warning(f"查詢改寫失敗: {e}")
             return query
@@ -461,9 +609,18 @@ class ChatOrchestrator:
             "disclaimer": ctx["disclaimer"],
         }
 
-        if self._openai and (ctx["has_policy"] or ctx["has_labor_law"]):
+        arbitration = ctx.get("arbitration") or {}
+        if arbitration:
+            result["notes"].append(
+                "來源仲裁"
+                f"(primary={arbitration.get('primary_source')}, "
+                f"mode={arbitration.get('priority_mode')}, "
+                f"conflict={arbitration.get('conflict_mode')})"
+            )
+
+        if self._llm_available and (ctx["has_policy"] or ctx["has_labor_law"]):
             try:
-                result["answer"] = self._generate_answer_sync(
+                result["answer"] = await self._generate_answer(
                     question, ctx, history=history
                 )
                 result["notes"].append("由 AI 根據檢索結果生成回答")
@@ -514,7 +671,30 @@ class ChatOrchestrator:
         context_text = "\n\n".join(context["context_parts"])
         history_summary = self._format_history_summary(history)
         calc_guidance = self._build_calc_guidance(question)
+        arbitration = context.get("arbitration", {})
+        conflict_mode = arbitration.get("conflict_mode", "legal_floor")
+        if conflict_mode == "law_override":
+            conflict_rule = "若公司內規與法規衝突，優先採用勞動法規。"
+        elif conflict_mode == "policy_override":
+            conflict_rule = "若公司內規與法規衝突，優先採用公司內規，並標註法規風險。"
+        else:
+            conflict_rule = (
+                "若公司內規低於法定最低標準，必須以法規為準並明確指出差異；"
+                "若公司內規高於法定標準，採公司內規。"
+            )
+
+        arbitration_text = (
+            "來源仲裁設定："
+            f"primary={arbitration.get('primary_source', 'policy')}，"
+            f"secondary={arbitration.get('secondary_source', 'law')}，"
+            f"policy_weight={arbitration.get('policy_weight', 0.65)}，"
+            f"law_weight={arbitration.get('law_weight', 0.35)}，"
+            f"priority_mode={arbitration.get('priority_mode', 'adaptive')}，"
+            f"conflict_mode={conflict_mode}。"
+        )
+
         user_content = f"問題：{question}\n\n參考資料：\n{context_text}\n\n請根據上述參考資料回答問題。"
+        user_content += f"\n\n{arbitration_text}\n衝突處理規則：{conflict_rule}"
         if history_summary:
             user_content = f"對話歷史摘要：\n{history_summary}\n\n" + user_content
         if calc_guidance:
@@ -535,22 +715,19 @@ class ChatOrchestrator:
 
     # ──────────── 同步生成（相容原介面） ────────────
 
-    def _generate_answer_sync(
+    async def _generate_answer(
         self,
         question: str,
         context: Dict[str, Any],
         history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
-        """同步 LLM 生成回答（非串流）。"""
+        """LLM 生成回答（非串流）。"""
         messages = self._build_llm_messages(question, context, history=history)
-
-        response = self._openai.chat.completions.create(
-            model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+        return await self._llm_generate_async(
             messages=messages,
             temperature=getattr(settings, "OPENAI_TEMPERATURE", 0.3),
             max_tokens=getattr(settings, "OPENAI_MAX_TOKENS", 1500),
         )
-        return response.choices[0].message.content.strip()
 
     @staticmethod
     def _build_calc_guidance(question: str) -> str:
