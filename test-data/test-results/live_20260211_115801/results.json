@@ -1,0 +1,201 @@
+{
+  "meta": {
+    "server": "http://api.172-237-5-254.sslip.io",
+    "time": "2026-02-11T12:03:57.291770",
+    "score": 3,
+    "max": 19,
+    "pct": 15.789473684210526
+  },
+  "results": [
+    {
+      "phase": "Phase 0",
+      "step": "0.1",
+      "action": "Health Check",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 370,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.2",
+      "action": "Superuser Login",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 737,
+      "detail": "eyJhbGciOiJIUzI1NiIs..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.3",
+      "action": "Get Tenant",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 314,
+      "detail": "ID=b4539d8d-ea5..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.4",
+      "action": "Create HR User",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 364,
+      "detail": "{'detail': [{'type': 'value_error', 'loc': ['body', 'email'], 'msg': 'value is n"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.1",
+      "action": "Upload hr-policy-test.md",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19457,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.2",
+      "action": "Upload 新增文件說明.md",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19429,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.3",
+      "action": "Upload 勞動契約書-謝雅玲.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19879,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.4",
+      "action": "Upload 勞動契約書-謝雅玲.txt",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19357,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.5",
+      "action": "Upload 員工名冊.csv",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19425,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.6",
+      "action": "Upload 員工名冊.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19608,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.7",
+      "action": "Upload 請假單範本-E012-周秀蘭.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19734,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.8",
+      "action": "Upload 請假單範本-E012-周秀蘭.txt",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19417,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.9",
+      "action": "Upload 健康檢查報告-E016-高淑珍.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 20027,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.10",
+      "action": "Upload 健康檢查報告-E016-高淑珍.txt",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19343,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.11",
+      "action": "Upload 員工手冊-第一章-總則.md",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19345,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.12",
+      "action": "Upload 員工手冊-第一章-總則.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19777,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.13",
+      "action": "Upload 獎懲管理辦法.md",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19351,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.14",
+      "action": "Upload 獎懲管理辦法.pdf",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 21798,
+      "detail": "{'_text': 'Internal Server Error'}"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.15",
+      "action": "Upload README.md",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 19400,
+      "detail": "{'_text': 'Internal Server Error'}"
+    }
+  ]
+}

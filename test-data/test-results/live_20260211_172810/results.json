@@ -1,0 +1,411 @@
+{
+  "meta": {
+    "server": "http://api.172-237-5-254.sslip.io",
+    "time": "2026-02-11T17:31:19.105520",
+    "score": 23.0,
+    "max": 80,
+    "pct": 28.749999999999996
+  },
+  "results": [
+    {
+      "phase": "Phase 0",
+      "step": "0.1",
+      "action": "Health Check",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 484,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.2",
+      "action": "Superuser Login",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 872,
+      "detail": "eyJhbGciOiJIUzI1NiIs..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.3",
+      "action": "Get Tenant",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 332,
+      "detail": "ID=7a77da32-b9b..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.4",
+      "action": "Create HR User",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 790,
+      "detail": "hr-test-1770802092@example.com"
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.5",
+      "action": "HR User Login",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 906,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.1",
+      "action": "Upload hr-policy-test.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 341,
+      "detail": "ID=8fb2ddea"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.2",
+      "action": "Upload 新增文件說明.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 387,
+      "detail": "ID=f2ca26de"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.3",
+      "action": "Upload 勞動契約書-謝雅玲.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 1028,
+      "detail": "ID=ec5012dd"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.4",
+      "action": "Upload 勞動契約書-謝雅玲.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 461,
+      "detail": "ID=c1e388b9"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.5",
+      "action": "Upload 員工名冊.csv",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 322,
+      "detail": "ID=ed31ec3c"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.6",
+      "action": "Upload 員工名冊.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 732,
+      "detail": "ID=b3cfd6b3"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.7",
+      "action": "Upload 請假單範本-E012-周秀蘭.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 821,
+      "detail": "ID=9d0abfd8"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.8",
+      "action": "Upload 請假單範本-E012-周秀蘭.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 320,
+      "detail": "ID=53f7aec5"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.9",
+      "action": "Upload 健康檢查報告-E016-高淑珍.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 1050,
+      "detail": "ID=41671a39"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.10",
+      "action": "Upload 健康檢查報告-E016-高淑珍.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 365,
+      "detail": "ID=5f642fe1"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.11",
+      "action": "Upload 員工手冊-第一章-總則.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 381,
+      "detail": "ID=a9ab0ffd"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.12",
+      "action": "Upload 員工手冊-第一章-總則.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 715,
+      "detail": "ID=cd10cbf4"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.13",
+      "action": "Upload 獎懲管理辦法.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 318,
+      "detail": "ID=a91e5ef6"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.14",
+      "action": "Upload 獎懲管理辦法.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 862,
+      "detail": "ID=124a2222"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.15",
+      "action": "Upload README.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 324,
+      "detail": "ID=5a16d70e"
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A1",
+      "action": "Q: 我們公司有交通津貼嗎？補助多少？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 8083,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A2",
+      "action": "Q: 公司績效考核是一年幾次？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 7531,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A3",
+      "action": "Q: 請問公司報帳有時間限制嗎？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 5982,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A4",
+      "action": "Q: 新人到職第一天需要準備什麼？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 8106,
+      "detail": "hits=0/4 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A5",
+      "action": "Q: 公司的加班費怎麼算？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 7457,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 3",
+      "step": "C1",
+      "action": "Q: 我們公司平日加班給 1.5 倍工資，這樣合法嗎？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 6951,
+      "detail": "hits=0/4 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 3",
+      "step": "C2",
+      "action": "Q: 員工特休沒休完，公司規定逾期視同放棄，這樣可以嗎？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 7107,
+      "detail": "hits=0/4 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 3",
+      "step": "C3",
+      "action": "Q: 全勤獎金因為員工請生理假被扣掉，合法嗎？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 7883,
+      "detail": "hits=0/5 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 4",
+      "step": "D1",
+      "action": "Q: 公司目前有多少位員工？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 3922,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 4",
+      "step": "D2",
+      "action": "Q: 技術部的平均月薪是多少？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 5178,
+      "detail": "hits=0/3 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 5",
+      "step": "E1",
+      "action": "Q: 如果明天有新人到職，我需要準備哪些流程和文件？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 7577,
+      "detail": "hits=0/5 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 5",
+      "step": "E2",
+      "action": "Q: 請幫我比較正職和約聘人員在福利上有什麼差異？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 4031,
+      "detail": "hits=0/4 ans=抱歉，未找到相關資訊。請嘗試換個方式提問，或聯繫 HR 部門。\n\n本回覆僅為內規與法規摘要，仍以公司..."
+    },
+    {
+      "phase": "Phase 7",
+      "step": "F1",
+      "action": "Follow: 承上題，如果這位員工年資未滿一年呢？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 5077,
+      "detail": "hits=0/3"
+    },
+    {
+      "phase": "Phase 7",
+      "step": "F2",
+      "action": "Follow: 那他可以申請育嬰假嗎？",
+      "status": "FAIL",
+      "score": 0.0,
+      "max_score": 4,
+      "elapsed_ms": 3295,
+      "detail": "hits=0/3"
+    },
+    {
+      "phase": "Phase 6",
+      "step": "6.1",
+      "action": "List Documents",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 383,
+      "detail": "15 docs"
+    },
+    {
+      "phase": "Phase 6",
+      "step": "6.2",
+      "action": "Get Document Detail",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 303,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 6",
+      "step": "6.3",
+      "action": "GET /users/me",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 347,
+      "detail": "hr-test-1770802092@example.com"
+    },
+    {
+      "phase": "Phase 6",
+      "step": "6.4",
+      "action": "GET /audit/",
+      "status": "WARN",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 352,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 8",
+      "step": "8.1",
+      "action": "Chat Latency (5x avg)",
+      "status": "OK",
+      "score": 0,
+      "max_score": 0,
+      "elapsed_ms": 5852,
+      "detail": "avg=5853ms min=5219ms max=6245ms"
+    },
+    {
+      "phase": "Phase 8",
+      "step": "8.2",
+      "action": "Health Latency (10x)",
+      "status": "OK",
+      "score": 0,
+      "max_score": 0,
+      "elapsed_ms": 334,
+      "detail": "avg=335ms"
+    }
+  ]
+}

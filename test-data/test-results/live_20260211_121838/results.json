@@ -1,0 +1,271 @@
+{
+  "meta": {
+    "server": "http://api.172-237-5-254.sslip.io",
+    "time": "2026-02-11T12:24:32.873878",
+    "score": 41.0,
+    "max": 44,
+    "pct": 93.18181818181817
+  },
+  "results": [
+    {
+      "phase": "Phase 0",
+      "step": "0.1",
+      "action": "Health Check",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 321,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.2",
+      "action": "Superuser Login",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 549,
+      "detail": "eyJhbGciOiJIUzI1NiIs..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.3",
+      "action": "Get Tenant",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 346,
+      "detail": "ID=b4539d8d-ea5..."
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.4",
+      "action": "Create HR User",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 605,
+      "detail": "hr-test-1770783519@example.com"
+    },
+    {
+      "phase": "Phase 0",
+      "step": "0.5",
+      "action": "HR User Login",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 716,
+      "detail": ""
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.1",
+      "action": "Upload hr-policy-test.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 524,
+      "detail": "ID=ed893014"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.2",
+      "action": "Upload 新增文件說明.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 390,
+      "detail": "ID=c1bd9fe5"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.3",
+      "action": "Upload 勞動契約書-謝雅玲.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 1115,
+      "detail": "ID=5f2b61f2"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.4",
+      "action": "Upload 勞動契約書-謝雅玲.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 311,
+      "detail": "ID=90aa3244"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.5",
+      "action": "Upload 員工名冊.csv",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 340,
+      "detail": "ID=dcbeed2a"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.6",
+      "action": "Upload 員工名冊.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 777,
+      "detail": "ID=b56aaa10"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.7",
+      "action": "Upload 請假單範本-E012-周秀蘭.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 749,
+      "detail": "ID=06a7f4c2"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.8",
+      "action": "Upload 請假單範本-E012-周秀蘭.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 329,
+      "detail": "ID=041d342a"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.9",
+      "action": "Upload 健康檢查報告-E016-高淑珍.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 1072,
+      "detail": "ID=aad0cb73"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.10",
+      "action": "Upload 健康檢查報告-E016-高淑珍.txt",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 311,
+      "detail": "ID=a4a13b76"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.11",
+      "action": "Upload 員工手冊-第一章-總則.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 376,
+      "detail": "ID=8da40161"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.12",
+      "action": "Upload 員工手冊-第一章-總則.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 768,
+      "detail": "ID=2bb0a9e9"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.13",
+      "action": "Upload 獎懲管理辦法.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 357,
+      "detail": "ID=ff662a70"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.14",
+      "action": "Upload 獎懲管理辦法.pdf",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 937,
+      "detail": "ID=0c5a8989"
+    },
+    {
+      "phase": "Phase 1",
+      "step": "1.15",
+      "action": "Upload README.md",
+      "status": "OK",
+      "score": 1,
+      "max_score": 1,
+      "elapsed_ms": 381,
+      "detail": "ID=31d5e9be"
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A1",
+      "action": "Q: 我們公司有交通津貼嗎？補助多少？",
+      "status": "OK",
+      "score": 4.0,
+      "max_score": 4,
+      "elapsed_ms": 47001,
+      "detail": "hits=3/3 ans=### 交通津貼相關資訊\n\n1. **交通津貼的發放依據**\n   - 根據《就業促進津貼實施辦法》..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A2",
+      "action": "Q: 公司績效考核是一年幾次？",
+      "status": "OK",
+      "score": 4.0,
+      "max_score": 4,
+      "elapsed_ms": 32408,
+      "detail": "hits=3/3 ans=### 績效考核的頻率\n\n1. **考核次數**\n   - 根據目前的參考資料，並未明確規定公司績效..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A3",
+      "action": "Q: 請問公司報帳有時間限制嗎？",
+      "status": "OK",
+      "score": 4.0,
+      "max_score": 4,
+      "elapsed_ms": 49239,
+      "detail": "hits=3/3 ans=### 公司報帳的時間限制\n\n1. **報帳的基本要求**\n   - 根據《勞動基準法》第30條，雇..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A4",
+      "action": "Q: 新人到職第一天需要準備什麼？",
+      "status": "OK",
+      "score": 3.0,
+      "max_score": 4,
+      "elapsed_ms": 41771,
+      "detail": "hits=3/4 ans=### 新人到職第一天需要準備的事項\n\n1. **勞工名卡**\n   - 雇主應置備勞工名卡，記載勞..."
+    },
+    {
+      "phase": "Phase 2",
+      "step": "A5",
+      "action": "Q: 公司的加班費怎麼算？",
+      "status": "OK",
+      "score": 4.0,
+      "max_score": 4,
+      "elapsed_ms": 58049,
+      "detail": "hits=3/3 ans=### 加班費的計算方式\n\n根據《勞動基準法》第24條的規定，加班費的計算方式如下：\n\n1. **平..."
+    },
+    {
+      "phase": "Phase 3",
+      "step": "C1",
+      "action": "Q: 我們公司平日加班給 1.5 倍工資，這樣合法嗎？",
+      "status": "OK",
+      "score": 2.0,
+      "max_score": 4,
+      "elapsed_ms": 35374,
+      "detail": "hits=2/4 ans=### 公司平日加班費的合法性分析\n\n根據《勞動基準法》第24條的規定，平日加班的工資計算標準如下：..."
+    }
+  ]
+}

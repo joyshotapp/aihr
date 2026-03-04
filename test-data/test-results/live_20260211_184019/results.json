@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "server": "http://api.172-237-5-254.sslip.io",
+    "time": "2026-02-11T18:40:21.804572",
+    "score": 0,
+    "max": 1,
+    "pct": 0.0
+  },
+  "results": [
+    {
+      "phase": "Phase 0",
+      "step": "0.1",
+      "action": "Health Check",
+      "status": "FAIL",
+      "score": 0,
+      "max_score": 1,
+      "elapsed_ms": 2705,
+      "detail": ""
+    }
+  ]
+}

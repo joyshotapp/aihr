@@ -47,10 +47,16 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     
     # OpenAI（用於 Generation 回答生成 + HyDE 查詢擴展）
+    LLM_BACKEND: str = "openai"  # openai / ollama / core
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"  # Generation 使用的模型
     OPENAI_TEMPERATURE: float = 0.3     # 回答生成溫度（低 = 更精確）
     OPENAI_MAX_TOKENS: int = 1500       # 回答最大 token 數
+
+    # Ollama（本地模型，使用 OpenAI 相容 API）
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "gemma3:27b"
+    OLLAMA_API_KEY: str = "ollama"
 
     # Voyage AI + pgvector
     VOYAGE_API_KEY: str = ""
@@ -85,6 +91,12 @@ class Settings(BaseSettings):
     RETRIEVAL_CACHE_TTL: int = 300         # 快取秒數
     RETRIEVAL_TOP_K: int = 5               # 預設返回數量
 
+    # Source arbitration (policy vs labor-law Core)
+    SOURCE_PRIORITY_MODE: str = "adaptive"    # adaptive / policy_first / law_first
+    POLICY_SOURCE_WEIGHT: float = 0.65         # 0.0 ~ 1.0
+    LAW_SOURCE_WEIGHT: float = 0.35            # 0.0 ~ 1.0
+    CONFLICT_RESOLUTION_MODE: str = "legal_floor"  # legal_floor / policy_override / law_override
+
     # SSO / OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
@@ -110,6 +122,42 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @field_validator("LLM_BACKEND")
+    @classmethod
+    def _validate_llm_backend(cls, v: str) -> str:
+        backend = (v or "openai").strip().lower()
+        if backend not in {"openai", "ollama", "core"}:
+            raise ValueError("LLM_BACKEND must be one of: openai, ollama, core")
+        return backend
+
+    @field_validator("SOURCE_PRIORITY_MODE")
+    @classmethod
+    def _validate_source_priority_mode(cls, v: str) -> str:
+        mode = (v or "adaptive").strip().lower()
+        if mode not in {"adaptive", "policy_first", "law_first"}:
+            raise ValueError(
+                "SOURCE_PRIORITY_MODE must be one of: adaptive, policy_first, law_first"
+            )
+        return mode
+
+    @field_validator("CONFLICT_RESOLUTION_MODE")
+    @classmethod
+    def _validate_conflict_resolution_mode(cls, v: str) -> str:
+        mode = (v or "legal_floor").strip().lower()
+        if mode not in {"legal_floor", "policy_override", "law_override"}:
+            raise ValueError(
+                "CONFLICT_RESOLUTION_MODE must be one of: legal_floor, policy_override, law_override"
+            )
+        return mode
+
+    @field_validator("POLICY_SOURCE_WEIGHT", "LAW_SOURCE_WEIGHT")
+    @classmethod
+    def _validate_source_weight(cls, v: float) -> float:
+        value = float(v)
+        if not (0.0 <= value <= 1.0):
+            raise ValueError("source weights must be between 0.0 and 1.0")
+        return value
 
     @model_validator(mode="after")
     def _validate_production_security(self) -> "Settings":
