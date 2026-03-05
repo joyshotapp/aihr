@@ -266,7 +266,10 @@ class KnowledgeBaseRetriever:
             for chunk, distance in query_obj.all():
                 # 懶查文件名
                 if chunk.document_id not in doc_map:
-                    doc = db.query(Document).filter(Document.id == chunk.document_id).first()
+                    doc = db.query(Document).filter(
+                        Document.id == chunk.document_id,
+                        Document.tenant_id == tenant_id,
+                    ).first()
                     doc_map[chunk.document_id] = doc.filename if doc else ""
 
                 score = round(1.0 - distance, 4)  # cosine similarity
@@ -316,7 +319,10 @@ class KnowledgeBaseRetriever:
 
                 # 取得文件名映射
                 doc_ids = list({c.document_id for c in chunks})
-                docs = db.query(Document).filter(Document.id.in_(doc_ids)).all()
+                docs = db.query(Document).filter(
+                    Document.id.in_(doc_ids),
+                    Document.tenant_id == tenant_id,
+                ).all()
                 doc_map = {d.id: d.filename for d in docs}
             finally:
                 db.close()
@@ -489,7 +495,7 @@ class KnowledgeBaseRetriever:
     ) -> str:
         raw = f"{tenant_id}:{query}:{mode}:{top_k}:{min_score}"
         h = hashlib.sha256(raw.encode()).hexdigest()[:16]
-        return f"kb:search:{h}"
+        return f"kb:search:{tenant_id}:{h}"
 
     def _cache_get(
         self, tenant_id: UUID, query: str, mode: str, top_k: int, min_score: float
@@ -530,8 +536,9 @@ class KnowledgeBaseRetriever:
         try:
             # 刪除所有此租戶的快取 key
             cursor = 0
+            match_pattern = f"kb:search:{tenant_id}:*"
             while True:
-                cursor, keys = self._redis.scan(cursor, match="kb:search:*", count=100)
+                cursor, keys = self._redis.scan(cursor, match=match_pattern, count=100)
                 if keys:
                     self._redis.delete(*keys)
                 if cursor == 0:

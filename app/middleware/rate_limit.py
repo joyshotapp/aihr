@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.config import settings
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,24 +29,13 @@ class RateLimiter:
     """基於 Redis 的滑動視窗限流器"""
 
     def __init__(self, redis_url: Optional[str] = None):
+        # redis_url 保留供外部測試注入；實際連線透過共用 factory
         self._redis_url = redis_url or getattr(settings, "CELERY_BROKER_URL", "redis://localhost:6379/0")
-        self._redis: Optional[redis.Redis] = None
 
     @property
-    def r(self) -> redis.Redis:
-        if self._redis is None:
-            try:
-                self._redis = redis.Redis.from_url(
-                    self._redis_url,
-                    decode_responses=True,
-                    socket_connect_timeout=2,
-                    socket_timeout=2,
-                )
-                self._redis.ping()
-            except Exception:
-                self._redis = None
-                raise
-        return self._redis
+    def r(self) -> Optional[redis.Redis]:
+        """取得 Redis 連線；不可用時回傳 None（呼叫端需處理）。"""
+        return get_redis_client()
 
     def is_allowed(
         self,
@@ -57,10 +47,13 @@ class RateLimiter:
         滑動視窗限流檢查。
         回傳 (allowed, remaining, retry_after_seconds)
         """
+        r = self.r
+        if r is None:
+            return True, max_requests, 0  # Redis 不可用時放行
         try:
             now = time.time()
             window_start = now - window_seconds
-            pipe = self.r.pipeline(transaction=True)
+            pipe = r.pipeline(transaction=True)
             pipe.zremrangebyscore(key, 0, window_start)
             pipe.zcard(key)
             pipe.zadd(key, {str(now): now})
@@ -70,9 +63,9 @@ class RateLimiter:
 
             if current_count >= max_requests:
                 # 超過限制 — 移除剛加的
-                self.r.zrem(key, str(now))
+                r.zrem(key, str(now))
                 # 計算下次可用時間
-                oldest = self.r.zrange(key, 0, 0, withscores=True)
+                oldest = r.zrange(key, 0, 0, withscores=True)
                 retry_after = int(window_seconds - (now - oldest[0][1])) if oldest else window_seconds
                 return False, 0, max(retry_after, 1)
 
@@ -89,19 +82,22 @@ class RateLimiter:
         回傳 True 表示已被標記為濫用。
         """
         abuse_key = f"abuse:{key}"
+        r = self.r
+        if r is None:
+            return False  # Redis 不可用時不封鎖
         try:
-            blocked = self.r.get(abuse_key)
+            blocked = r.get(abuse_key)
             if blocked:
                 return True
 
             count_key = f"abuse_count:{key}"
-            count = self.r.incr(count_key)
+            count = r.incr(count_key)
             if count == 1:
-                self.r.expire(count_key, window)
+                r.expire(count_key, window)
 
             if count > threshold:
                 # 封鎖 10 分鐘
-                self.r.setex(abuse_key, 600, "1")
+                r.setex(abuse_key, 600, "1")
                 logger.warning("Abuse detected for %s, blocking for 10 minutes", key)
                 return True
 

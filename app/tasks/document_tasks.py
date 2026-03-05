@@ -5,6 +5,7 @@ import logging
 from typing import List
 from uuid import UUID
 import voyageai
+from celery.exceptions import SoftTimeLimitExceeded
 from app.celery_app import celery_app
 from app.config import settings
 from app.db.session import SessionLocal
@@ -16,7 +17,15 @@ from app.models.document import DocumentChunk
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, max_retries=3)
+@celery_app.task(
+    bind=True,
+    max_retries=getattr(settings, "CELERY_DOCUMENT_TASK_MAX_RETRIES", 3),
+    soft_time_limit=getattr(settings, "CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", 300),
+    time_limit=getattr(settings, "CELERY_TASK_TIME_LIMIT_SECONDS", 360),
+    retry_backoff=getattr(settings, "CELERY_TASK_RETRY_BACKOFF", True),
+    retry_backoff_max=getattr(settings, "CELERY_TASK_RETRY_BACKOFF_MAX_SECONDS", 300),
+    retry_jitter=getattr(settings, "CELERY_TASK_RETRY_JITTER", True),
+)
 def process_document_task(self, document_id: str, file_path: str, tenant_id: str):
     """
     背景任務：處理文件
@@ -192,6 +201,24 @@ def process_document_task(self, document_id: str, file_path: str, tenant_id: str
             "chunks": inserted,
         }
         
+    except SoftTimeLimitExceeded as e:
+        if db:
+            doc = crud_document.get(db, document_id=UUID(document_id))
+            if doc:
+                crud_document.update(
+                    db,
+                    db_obj=doc,
+                    obj_in=DocumentUpdate(
+                        status="failed",
+                        error_message="任務逾時，已中止處理",
+                    )
+                )
+
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=e)
+
+        return {"status": "failed", "error": "task soft time limit exceeded"}
+
     except Exception as e:
         # 記錄錯誤
         if db:
@@ -208,7 +235,7 @@ def process_document_task(self, document_id: str, file_path: str, tenant_id: str
         
         # 重試機制
         if self.request.retries < self.max_retries:
-            raise self.retry(exc=e, countdown=60)
+            raise self.retry(exc=e)
         
         return {"status": "failed", "error": str(e)}
     
@@ -216,7 +243,15 @@ def process_document_task(self, document_id: str, file_path: str, tenant_id: str
         db.close()
 
 
-@celery_app.task(bind=True, max_retries=2)
+@celery_app.task(
+    bind=True,
+    max_retries=getattr(settings, "CELERY_URL_TASK_MAX_RETRIES", 2),
+    soft_time_limit=getattr(settings, "CELERY_TASK_SOFT_TIME_LIMIT_SECONDS", 300),
+    time_limit=getattr(settings, "CELERY_TASK_TIME_LIMIT_SECONDS", 360),
+    retry_backoff=getattr(settings, "CELERY_TASK_RETRY_BACKOFF", True),
+    retry_backoff_max=getattr(settings, "CELERY_TASK_RETRY_BACKOFF_MAX_SECONDS", 300),
+    retry_jitter=getattr(settings, "CELERY_TASK_RETRY_JITTER", True),
+)
 def process_url_task(self, document_id: str, url: str, tenant_id: str):
     """
     背景任務：擷取網頁 URL 內容並向量化。
@@ -350,6 +385,22 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
             "chunks": inserted,
         }
 
+    except SoftTimeLimitExceeded as e:
+        if db:
+            doc = crud_document.get(db, document_id=UUID(document_id))
+            if doc:
+                crud_document.update(
+                    db,
+                    db_obj=doc,
+                    obj_in=DocumentUpdate(
+                        status="failed",
+                        error_message="任務逾時，已中止處理",
+                    ),
+                )
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=e)
+        return {"status": "failed", "error": "task soft time limit exceeded"}
+
     except Exception as e:
         if db:
             doc = crud_document.get(db, document_id=UUID(document_id))
@@ -359,7 +410,7 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
                     obj_in=DocumentUpdate(status="failed", error_message=str(e)),
                 )
         if self.request.retries < self.max_retries:
-            raise self.retry(exc=e, countdown=60)
+            raise self.retry(exc=e)
         return {"status": "failed", "error": str(e)}
 
     finally:

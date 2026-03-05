@@ -25,6 +25,10 @@ from pathlib import Path
 from typing import Optional
 import urllib.request, urllib.parse, urllib.error, ssl
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 # ── 常數 ─────────────────────────────────────
 
 BASE_URL = os.getenv("AIHR_BASE_URL", "http://localhost:8000")
@@ -461,6 +465,8 @@ class TestRunner:
                 if dc or cc:
                     print(f"    🧹 清理舊資料: {dc} docs, {cc} chunks")
             db.close()
+        except ModuleNotFoundError as e:
+            print(f"    ⏭️ 跳過本地 DB 清理（缺少依賴: {e.name}）")
         except Exception as e:
             print(f"    ⚠️ 清理失敗(可忽略): {e}")
 
@@ -531,7 +537,7 @@ class TestRunner:
         if self.tenant_id and "superuser" in self.tokens:
             try:
                 ub = {"email": HR_EMAIL, "password": HR_PASS, "full_name": "李小芳",
-                      "tenant_id": self.tenant_id, "role": "admin"}
+                      "tenant_id": self.tenant_id, "role": "hr"}
                 st, resp, ms = http_request("POST", f"{BASE_URL}/api/v1/users/", body=ub,
                                             headers={"Authorization": f"Bearer {self.tokens['superuser']}"})
                 self.log.log_api("0.5", "POST", "/users/", status_code=st, duration_ms=ms,

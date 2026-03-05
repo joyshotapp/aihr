@@ -137,8 +137,9 @@ services:
     command: >
       celery -A app.celery_app worker
         --loglevel=info
-        --concurrency=2
-        --max-tasks-per-child=200
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
     restart: always
     env_file: .env.production
     environment:
@@ -147,6 +148,8 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
+      - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
     volumes:
       - uploads_data:/code/uploads    # Shared with web for file processing
     depends_on:

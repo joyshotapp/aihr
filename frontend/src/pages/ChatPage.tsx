@@ -4,7 +4,7 @@ import { useAuth } from '../auth'
 import type { Conversation, Message, ChatSource, SSEEvent, SearchResult } from '../types'
 import {
   Send, Plus, Loader2, MessageSquare, Trash2,
-  Download, Search, X,
+  Download, Search, X, Eraser,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { format } from 'date-fns'
@@ -189,6 +189,19 @@ export default function ChatPage() {
     setStreamStatus(null)
   }
 
+  const handleClearAllConvs = async () => {
+    if (conversations.length === 0) return
+    if (!confirm(`確定要刪除全部 ${conversations.length} 筆對話記錄？此操作無法復原。`)) return
+    try {
+      await Promise.all(conversations.map(c => chatApi.deleteConversation(c.id)))
+      setConversations([])
+      handleNewChat()
+      toast.success('已清除全部對話記錄')
+    } catch {
+      toast.error('清除失敗，請再試一次')
+    }
+  }
+
   const handleDeleteConv = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm('確定要刪除此對話？')) return
@@ -258,13 +271,22 @@ export default function ChatPage() {
       <div className="hidden md:flex w-64 flex-col border-r border-gray-200 bg-white">
         <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-gray-700">對話記錄</h2>
-          <button
-            onClick={handleNewChat}
-            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-[#d15454] transition-colors"
-            title="新對話"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={handleClearAllConvs}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+              title="清除全部對話"
+            >
+              <Eraser className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleNewChat}
+              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-[#d15454] transition-colors"
+              title="新對話"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* T7-13: search bar */}

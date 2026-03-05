@@ -11,7 +11,16 @@ services:
 
   worker:
     env_file: .env.staging
+    command: >
+      celery -A app.celery_app worker
+        --loglevel=info
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
     restart: always
+    environment:
+      - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
+      - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
 
   db:
     environment:
@@ -21,6 +30,13 @@ services:
 
   redis:
     restart: always
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   frontend:
     restart: always
