@@ -14,7 +14,20 @@ class AuditLog(Base):
     target_id = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     detail_json = Column(JSON, default={})
-    
+
+    # 不可竄改読取欄位 ---
+    content_hash = Column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 of canonical fields (tenant|actor|action|target_type|target_id|created_at)"
+    )
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        comment="留存期限；到期前 DB trigger 禁止刪除"
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

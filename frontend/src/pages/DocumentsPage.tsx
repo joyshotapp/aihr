@@ -3,7 +3,7 @@ import { docApi } from '../api'
 import api from '../api'
 import { useAuth } from '../auth'
 import type { Document } from '../types'
-import { Upload, FileText, Trash2, Loader2, CheckCircle, AlertCircle, Clock, RefreshCw, Filter } from 'lucide-react'
+import { Upload, FileText, Trash2, Loader2, CheckCircle, AlertCircle, Clock, RefreshCw, Filter, Eraser } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { format } from 'date-fns'
 import clsx from 'clsx'
@@ -109,6 +109,18 @@ export default function DocumentsPage() {
     multiple: true,
   })
 
+  const handleClearAll = async () => {
+    if (docs.length === 0) return
+    if (!confirm(`確定要刪除全部 ${docs.length} 份文件？此操作無法復原。`)) return
+    try {
+      await Promise.all(docs.map(d => docApi.delete(d.id)))
+      setDocs([])
+      toast.success('已清除全部文件')
+    } catch {
+      toast.error('清除失敗，請再試一次')
+    }
+  }
+
   const handleDelete = async (doc: Document) => {
     if (!confirm(`確定要刪除「${doc.filename}」？此操作無法復原。`)) return
     try {
@@ -143,6 +155,15 @@ export default function DocumentsPage() {
                 ))}
               </select>
             </div>
+          )}
+          {canManage && docs.length > 0 && (
+            <button
+              onClick={handleClearAll}
+              className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+              title="清除全部文件"
+            >
+              <Eraser className="h-4 w-4" />
+            </button>
           )}
           <button onClick={loadDocs} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 transition-colors" title="重新整理">
             <RefreshCw className="h-4 w-4" />

@@ -103,7 +103,12 @@ services:
   worker:
     build: .
     container_name: worker-${REGION:-ap}
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    command: >
+      celery -A app.celery_app worker
+        --loglevel=info
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+        --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
     restart: always
     environment:
       - APP_ENV=production
@@ -115,6 +120,8 @@ services:
       - REDIS_HOST=redis-${REGION:-ap}
       - CELERY_BROKER_URL=redis://redis-${REGION:-ap}:6379/0
       - CELERY_RESULT_BACKEND=redis://redis-${REGION:-ap}:6379/0
+      - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
+      - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
       - SECRET_KEY=${SECRET_KEY}
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - VOYAGE_API_KEY=${VOYAGE_API_KEY}

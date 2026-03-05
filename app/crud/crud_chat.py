@@ -10,6 +10,19 @@ def get_conversation(db: Session, conversation_id: UUID) -> Optional[Conversatio
     return db.query(Conversation).filter(Conversation.id == conversation_id).first()
 
 
+def get_conversation_for_user(
+    db: Session,
+    conversation_id: UUID,
+    user_id: UUID,
+    tenant_id: UUID,
+) -> Optional[Conversation]:
+    return db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user_id,
+        Conversation.tenant_id == tenant_id,
+    ).first()
+
+
 def get_user_conversations(
     db: Session,
     user_id: UUID,
@@ -64,6 +77,25 @@ def get_message_by_id(db: Session, message_id: UUID) -> Optional[Message]:
     return db.query(Message).filter(Message.id == message_id).first()
 
 
+def get_message_by_id_for_user(
+    db: Session,
+    message_id: UUID,
+    user_id: UUID,
+    tenant_id: UUID,
+) -> Optional[Message]:
+    """根據 ID 取得單一訊息（含 tenant/user 邊界檢查）。"""
+    return (
+        db.query(Message)
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .filter(
+            Message.id == message_id,
+            Conversation.user_id == user_id,
+            Conversation.tenant_id == tenant_id,
+        )
+        .first()
+    )
+
+
 def get_conversation_messages(
     db: Session,
     conversation_id: UUID,
@@ -79,6 +111,26 @@ def delete_conversation(db: Session, conversation_id: UUID) -> bool:
     conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if conv:
         # 刪除相關訊息
+        db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+        db.delete(conv)
+        db.commit()
+        return True
+    return False
+
+
+def delete_conversation_for_user(
+    db: Session,
+    conversation_id: UUID,
+    user_id: UUID,
+    tenant_id: UUID,
+) -> bool:
+    conv = get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        tenant_id=tenant_id,
+    )
+    if conv:
         db.query(Message).filter(Message.conversation_id == conversation_id).delete()
         db.delete(conv)
         db.commit()

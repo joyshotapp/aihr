@@ -7,13 +7,15 @@ services:
     volumes:
       - .:/code
     ports:
-      - "8001:8000"
+      - "8002:8000"
     environment:
       - POSTGRES_SERVER=db
       - REDIS_HOST=redis
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   db:
     image: pgvector/pgvector:pg16
@@ -25,16 +27,35 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=unihr_saas
     ports:
-      - "5435:5432"
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   redis:
     image: redis:7-alpine
+    restart: on-failure
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6380:6379"
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
   
   worker:
     build: .
-    command: celery -A app.celery_app worker --loglevel=info
+    command: >
+      celery -A app.celery_app worker
+        --loglevel=info
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
     volumes:
       - .:/code
     environment:
@@ -42,21 +63,32 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
+      - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -q '[c]elery.*worker' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_started
+      redis:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     ports:
-      - "3001:80"
+      - "3003:80"
     depends_on:
       - web
 
   admin-frontend:
     build: ./admin-frontend
     ports:
-      - "3002:80"
+      - "3004:80"
     depends_on:
       - web
 

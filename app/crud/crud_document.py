@@ -11,6 +11,13 @@ def get(db: Session, document_id: UUID) -> Document:
     return db.query(Document).filter(Document.id == document_id).first()
 
 
+def get_for_tenant(db: Session, document_id: UUID, tenant_id: UUID) -> Document:
+    return db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id == tenant_id,
+    ).first()
+
+
 def get_by_tenant(db: Session, tenant_id: UUID, skip: int = 0, limit: int = 100) -> List[Document]:
     return db.query(Document).filter(
         Document.tenant_id == tenant_id
@@ -53,6 +60,22 @@ def delete(db: Session, *, document_id: UUID) -> bool:
     return False
 
 
+def delete_for_tenant(db: Session, *, document_id: UUID, tenant_id: UUID) -> bool:
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.tenant_id == tenant_id,
+    ).first()
+    if doc:
+        db.query(DocumentChunk).filter(
+            DocumentChunk.document_id == document_id,
+            DocumentChunk.tenant_id == tenant_id,
+        ).delete()
+        db.delete(doc)
+        db.commit()
+        return True
+    return False
+
+
 def create_chunk(
     db: Session,
     *,
@@ -80,4 +103,11 @@ def create_chunk(
 def get_chunks(db: Session, document_id: UUID) -> List[DocumentChunk]:
     return db.query(DocumentChunk).filter(
         DocumentChunk.document_id == document_id
+    ).order_by(DocumentChunk.chunk_index).all()
+
+
+def get_chunks_for_tenant(db: Session, document_id: UUID, tenant_id: UUID) -> List[DocumentChunk]:
+    return db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id,
+        DocumentChunk.tenant_id == tenant_id,
     ).order_by(DocumentChunk.chunk_index).all()

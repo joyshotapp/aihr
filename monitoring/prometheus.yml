@@ -30,17 +30,34 @@ scrape_configs:
     static_configs:
       - targets: ["localhost:9090"]
 
-  # ── Node Exporter (optional — host metrics) ──
-  # - job_name: "node"
-  #   static_configs:
-  #     - targets: ["node-exporter:9100"]
+  # ── Node Exporter（主機 CPU/記憶體/磁碟）──
+  # 啟動方式: docker run -d --net="host" prom/node-exporter
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: "host"
 
-  # ── PostgreSQL Exporter (optional) ──
-  # - job_name: "postgres"
-  #   static_configs:
-  #     - targets: ["postgres-exporter:9187"]
+  # ── PostgreSQL Exporter ──
+  # 啟動方式: 在 docker-compose.prod.yml 加入 postgres-exporter 服務
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          service: "database"
 
-  # ── Redis Exporter (optional) ──
-  # - job_name: "redis"
-  #   static_configs:
-  #     - targets: ["redis-exporter:9121"]
+  # ── Redis Exporter ──
+  # 啟動方式: 在 docker-compose.prod.yml 加入 redis-exporter 服務
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          service: "cache"
+
+  # ── Celery Exporter（可選，需 celery-exporter 套件）──
+  # 啟動方式: celery-exporter --broker redis://redis:6379/0
+  - job_name: "unihr-celery"
+    static_configs:
+      - targets: ["celery-exporter:9808"]
+        labels:
+          service: "worker"

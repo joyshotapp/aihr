@@ -169,19 +169,20 @@ def get_document(
     """
     獲取文件詳情
     """
-    document = crud_document.get(db, document_id=document_id)
+    document = (
+        crud_document.get(db, document_id=document_id)
+        if current_user.is_superuser
+        else crud_document.get_for_tenant(
+            db,
+            document_id=document_id,
+            tenant_id=current_user.tenant_id,
+        )
+    )
     
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="文件不存在"
-        )
-    
-    # 權限檢查
-    if not current_user.is_superuser and document.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="無權限訪問此文件"
         )
     
     return document
@@ -204,7 +205,15 @@ def delete_document(
     # 權限檢查
     check_document_permission(current_user, "delete")
     
-    document = crud_document.get(db, document_id=document_id)
+    document = (
+        crud_document.get(db, document_id=document_id)
+        if current_user.is_superuser
+        else crud_document.get_for_tenant(
+            db,
+            document_id=document_id,
+            tenant_id=current_user.tenant_id,
+        )
+    )
     
     if not document:
         raise HTTPException(
@@ -212,16 +221,17 @@ def delete_document(
             detail="文件不存在"
         )
     
-    # 權限檢查
-    if not current_user.is_superuser and document.tenant_id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="無權限刪除此文件"
-        )
-    
     # 刪除向量（pgvector: chunks 含有 embedding，直接刪除 DB 記錄即可）
     try:
-        chunks = crud_document.get_chunks(db, document_id=document_id)
+        chunks = (
+            crud_document.get_chunks(db, document_id=document_id)
+            if current_user.is_superuser
+            else crud_document.get_chunks_for_tenant(
+                db,
+                document_id=document_id,
+                tenant_id=current_user.tenant_id,
+            )
+        )
         for chunk in chunks:
             db.delete(chunk)
         db.commit()
@@ -242,6 +252,13 @@ def delete_document(
         print(f"刪除實體文件失敗: {e}")
     
     # 刪除資料庫記錄
-    crud_document.delete(db, document_id=document_id)
+    if current_user.is_superuser:
+        crud_document.delete(db, document_id=document_id)
+    else:
+        crud_document.delete_for_tenant(
+            db,
+            document_id=document_id,
+            tenant_id=current_user.tenant_id,
+        )
     
     return {"message": "文件已刪除", "document_id": str(document_id)}

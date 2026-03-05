@@ -41,17 +41,66 @@ class Settings(BaseSettings):
     # Redis
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 2   # 秒
+    REDIS_SOCKET_TIMEOUT: int = 2           # 秒
+    REDIS_SOCKET_KEEPALIVE: bool = True
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30   # 秒，redis-py 內建心跳
+
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
-    
+    CELERY_WORKER_CONCURRENCY: int = 2
+    CELERY_WORKER_MAX_TASKS_PER_CHILD: int = 100
+    CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB: int = 524288  # 512 MB
+    CELERY_WORKER_PREFETCH_MULTIPLIER: int = 1
+    CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = 300
+    CELERY_TASK_TIME_LIMIT_SECONDS: int = 360
+    CELERY_TASK_ACKS_LATE: bool = True
+    CELERY_TASK_REJECT_ON_WORKER_LOST: bool = True
+    CELERY_TASK_RETRY_BACKOFF: bool = True
+    CELERY_TASK_RETRY_BACKOFF_MAX_SECONDS: int = 300
+    CELERY_TASK_RETRY_JITTER: bool = True
+    CELERY_DOCUMENT_TASK_MAX_RETRIES: int = 3
+    CELERY_URL_TASK_MAX_RETRIES: int = 2
+
+    # 稽核留存
+    AUDIT_RETENTION_YEARS: int = 7  # 關鍵事件留存年限（勞基法規建議最小 5 年）
+
     # OpenAI（用於 Generation 回答生成 + HyDE 查詢擴展）
     LLM_BACKEND: str = "openai"  # openai / ollama / core
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"  # Generation 使用的模型
     OPENAI_TEMPERATURE: float = 0.3     # 回答生成溫度（低 = 更精確）
     OPENAI_MAX_TOKENS: int = 1500       # 回答最大 token 數
+    LLM_MAX_INPUT_TOKENS: int = 6000    # prompts + context 合計上限（預估）
+    LLM_CONTEXT_RESERVE_TOKENS: int = 1800  # 預留給模型輸出與安全緩衝
+    LLM_GUARDRAIL_ENABLED: bool = True
+    LLM_GUARDRAIL_BLOCK_PATTERNS: str = (
+        "ignore previous instructions,"
+        "system prompt,"
+        "developer message,"
+        "忽略上述,"
+        "忽略前面,"
+        "顯示提示詞,"
+        "越權"
+    )
+    LLM_IO_SENSITIVE_FILTER_ENABLED: bool = True
+    LLM_INPUT_SENSITIVE_PATTERNS: str = (
+        "身分證字號,"
+        "信用卡,"
+        "密碼,"
+        "一次性密碼,"
+        "otp"
+    )
+    LLM_OUTPUT_SENSITIVE_PATTERNS: str = (
+        "api key,"
+        "secret key,"
+        "password,"
+        "access token,"
+        "refresh token,"
+        "系統提示詞,"
+        "system prompt"
+    )
 
     # Ollama（本地模型，使用 OpenAI 相容 API）
     OLLAMA_BASE_URL: str = "http://localhost:11434"
@@ -110,6 +159,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_USER: int = 60           # requests / minute per user
     RATE_LIMIT_PER_TENANT: int = 300        # requests / minute per tenant
     RATE_LIMIT_CHAT_PER_USER: int = 20      # chat requests / minute per user
+
+    # PostgreSQL RLS
+    RLS_ENFORCEMENT_ENABLED: bool = False
 
     # Admin API Network Isolation (T4-4)
     ADMIN_IP_WHITELIST_ENABLED: bool = False   # Enable in production

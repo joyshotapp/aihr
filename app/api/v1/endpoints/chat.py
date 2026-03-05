@@ -58,11 +58,14 @@ async def chat_stream(
     # 1. 獲取或建立對話
     conversation_id = request.conversation_id
     if conversation_id:
-        conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
+        conversation = crud_chat.get_conversation_for_user(
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
         if not conversation:
             raise HTTPException(status_code=404, detail="對話不存在")
-        if conversation.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="無權訪問此對話")
     else:
         conversation = crud_chat.create_conversation(
             db,
@@ -214,16 +217,16 @@ async def chat(
     # 1. 獲取或建立對話
     conversation_id = request.conversation_id
     if conversation_id:
-        conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
+        conversation = crud_chat.get_conversation_for_user(
+            db,
+            conversation_id=conversation_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
         if not conversation:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="對話不存在"
-            )
-        if conversation.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="無權訪問此對話"
             )
     else:
         # 建立新對話
@@ -332,16 +335,16 @@ def get_conversation(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """獲取特定對話"""
-    conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
+    conversation = crud_chat.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="對話不存在"
-        )
-    if conversation.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="無權訪問此對話"
         )
     return conversation
 
@@ -356,16 +359,16 @@ def get_conversation_messages(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """獲取對話的訊息歷史"""
-    conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
+    conversation = crud_chat.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="對話不存在"
-        )
-    if conversation.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="無權訪問此對話"
         )
     
     messages = crud_chat.get_conversation_messages(
@@ -382,19 +385,17 @@ def delete_conversation(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """刪除對話"""
-    conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
-    if not conversation:
+    deleted = crud_chat.delete_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
+    if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="對話不存在"
         )
-    if conversation.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="無權刪除此對話"
-        )
-    
-    crud_chat.delete_conversation(db, conversation_id=conversation_id)
     return {"message": "對話已刪除", "conversation_id": str(conversation_id)}
 
 
@@ -409,7 +410,12 @@ async def submit_feedback(
 ) -> Any:
     """提交聊天回饋（👍/👎）"""
     # 驗證 message 存在
-    msg = crud_chat.get_message_by_id(db, message_id=feedback.message_id)
+    msg = crud_chat.get_message_by_id_for_user(
+        db,
+        message_id=feedback.message_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
     if not msg:
         raise HTTPException(status_code=404, detail="訊息不存在")
 
@@ -447,11 +453,14 @@ async def export_conversation(
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
     """匯出對話為 Markdown"""
-    conversation = crud_chat.get_conversation(db, conversation_id=conversation_id)
+    conversation = crud_chat.get_conversation_for_user(
+        db,
+        conversation_id=conversation_id,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
+    )
     if not conversation:
         raise HTTPException(status_code=404, detail="對話不存在")
-    if conversation.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="無權訪問此對話")
 
     messages = crud_chat.get_conversation_messages(db, conversation_id=conversation_id)
 

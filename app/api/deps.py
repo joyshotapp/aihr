@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -42,6 +43,18 @@ def get_current_user(
     user = crud_user.get_by_email(db, email=token_data.sub)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if getattr(settings, "RLS_ENFORCEMENT_ENABLED", False):
+        tenant_id_str = str(user.tenant_id) if getattr(user, "tenant_id", None) else ""
+        bypass_value = "1" if getattr(user, "is_superuser", False) else "0"
+        db.execute(
+            text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+            {"tenant_id": tenant_id_str},
+        )
+        db.execute(
+            text("SELECT set_config('app.bypass_rls', :bypass, true)"),
+            {"bypass": bypass_value},
+        )
     return user
 
 

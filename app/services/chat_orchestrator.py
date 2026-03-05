@@ -3,7 +3,7 @@ import json
 import re
 import asyncio
 from datetime import date
-from typing import Dict, Any, List, Optional, AsyncGenerator
+from typing import Dict, Any, List, Optional, AsyncGenerator, Tuple
 from uuid import UUID
 import uuid
 from app.config import settings
@@ -294,11 +294,15 @@ class ChatOrchestrator:
             "question": question,
             "has_policy": has_policy,
             "has_labor_law": has_labor_law,
+            "labor_law_status": labor_law.get("status"),
+            "labor_law_error": labor_law.get("error"),
             "company_policy_raw": None,
             "labor_law_raw": None,
             "context_parts": [],
             "sources": [],
             "arbitration": arbitration,
+            "requires_law_source": bool(arbitration.get("is_legal_sensitive")),
+            "refusal_reason": None,
             "disclaimer": "本回答僅供參考，不構成正式法律意見。如有具體情況，請諮詢專業法律顧問。",
         }
 
@@ -406,6 +410,13 @@ class ChatOrchestrator:
         else:
             context["context_parts"].extend(policy_context_parts + law_context_parts)
 
+        if context["requires_law_source"] and not has_labor_law:
+            detail = context.get("labor_law_error") or "法規來源暫時不可用"
+            context["refusal_reason"] = (
+                "此問題涉及法規判斷，且法規來源目前無法驗證（"
+                f"{detail}），為避免提供不準確或過期法規資訊，請稍後再試或改由法規資料可用時查詢。"
+            )
+
         return context
 
     @staticmethod
@@ -475,6 +486,24 @@ class ChatOrchestrator:
         yield 每個 token chunk，前端可逐字渲染。
         若 LLM 不可用，則 yield 整段 fallback。
         """
+        block_reason = self._guardrail_block_reason(question)
+        if block_reason:
+            logger.warning("Guardrail blocked stream query: %s", block_reason)
+            yield "為確保資料與系統安全，此問題包含疑似越權或提示詞操控指令，請改為具體的人資制度或法規問題。"
+            return
+
+        input_sensitive = self._sensitive_content_reason(question, direction="input")
+        if input_sensitive:
+            logger.warning("Sensitive input blocked in stream query: %s", input_sensitive)
+            yield "此問題包含敏感資訊請求，為保護資料安全已拒絕處理。請移除敏感資料後再提問。"
+            return
+
+        law_unavailable_reason = self._law_source_unavailable_reason(context)
+        if law_unavailable_reason:
+            logger.warning("Legal-sensitive query refused due to missing law source")
+            yield law_unavailable_reason
+            return
+
         if not self._llm_available or not (context["has_policy"] or context["has_labor_law"]):
             yield self._fallback_answer(context)
             return
@@ -495,6 +524,14 @@ class ChatOrchestrator:
                 async for chunk in response:
                     delta = chunk.choices[0].delta
                     if delta.content:
+                        output_sensitive = self._sensitive_content_reason(
+                            delta.content,
+                            direction="output",
+                        )
+                        if output_sensitive:
+                            logger.warning("Sensitive output blocked in stream response: %s", output_sensitive)
+                            yield "回覆內容含敏感資訊，已由安全機制中止輸出。"
+                            return
                         yield delta.content
             else:
                 answer = await self._llm_generate_async(
@@ -502,6 +539,11 @@ class ChatOrchestrator:
                     temperature=getattr(settings, "OPENAI_TEMPERATURE", 0.3),
                     max_tokens=getattr(settings, "OPENAI_MAX_TOKENS", 1500),
                 )
+                output_sensitive = self._sensitive_content_reason(answer, direction="output")
+                if output_sensitive:
+                    logger.warning("Sensitive output blocked in non-stream path: %s", output_sensitive)
+                    yield "回覆內容含敏感資訊，已由安全機制中止輸出。"
+                    return
                 yield answer
         except Exception as e:
             logger.warning(f"LLM 串流生成失敗，回退到模板: {e}")
@@ -520,6 +562,117 @@ class ChatOrchestrator:
         "公司規定", "內規", "流程", "sop", "報帳", "報到", "簽核", "核銷", "表單", "制度",
         "員工手冊", "部門", "津貼", "獎懲", "考核",
     )
+    _PROMPT_INJECTION_PATTERNS = (
+        r"ignore\s+(all\s+)?(previous|above)\s+instructions",
+        r"(reveal|show|print).{0,20}(system\s*prompt|developer\s*message)",
+        r"請\s*忽略.{0,30}(規則|指示|說明|限制)",
+        r"忽略.{0,20}(上述|前述|系統|提示詞)",
+        r"顯示.{0,20}(系統提示詞|提示詞|system prompt)",
+        r"越權",
+    )
+
+    @staticmethod
+    def _estimate_tokens(text: str) -> int:
+        if not text:
+            return 0
+        cjk_chars = len(re.findall(r"[\u4e00-\u9fff]", text))
+        other_chars = max(0, len(text) - cjk_chars)
+        return max(1, cjk_chars * 2 + other_chars // 4)
+
+    def _truncate_text_by_tokens(self, text: str, token_budget: int) -> str:
+        if token_budget <= 0:
+            return ""
+        if self._estimate_tokens(text) <= token_budget:
+            return text
+
+        low, high = 0, len(text)
+        while low < high:
+            mid = (low + high + 1) // 2
+            if self._estimate_tokens(text[:mid]) <= token_budget:
+                low = mid
+            else:
+                high = mid - 1
+        return text[:low].rstrip()
+
+    def _apply_context_budget(
+        self,
+        context_parts: List[str],
+        token_budget: int,
+    ) -> Tuple[str, bool]:
+        if token_budget <= 0:
+            return "", bool(context_parts)
+
+        used = 0
+        kept_parts: List[str] = []
+        truncated = False
+
+        for part in context_parts:
+            remaining = token_budget - used
+            if remaining <= 0:
+                truncated = True
+                break
+
+            part_tokens = self._estimate_tokens(part)
+            if part_tokens <= remaining:
+                kept_parts.append(part)
+                used += part_tokens
+                continue
+
+            clipped = self._truncate_text_by_tokens(part, remaining)
+            if clipped:
+                kept_parts.append(clipped)
+            truncated = True
+            break
+
+        return "\n\n".join(kept_parts), truncated
+
+    def _guardrail_block_reason(self, question: str) -> Optional[str]:
+        if not getattr(settings, "LLM_GUARDRAIL_ENABLED", True):
+            return None
+
+        compiled_patterns = list(self._PROMPT_INJECTION_PATTERNS)
+        extra_patterns = getattr(settings, "LLM_GUARDRAIL_BLOCK_PATTERNS", "")
+        if extra_patterns:
+            compiled_patterns.extend(
+                p.strip() for p in extra_patterns.split(",") if p.strip()
+            )
+
+        for pattern in compiled_patterns:
+            try:
+                if re.search(pattern, question, flags=re.IGNORECASE):
+                    return f"matched pattern: {pattern}"
+            except re.error:
+                if pattern.lower() in question.lower():
+                    return f"matched keyword: {pattern}"
+        return None
+
+    def _sensitive_content_reason(self, text: str, *, direction: str) -> Optional[str]:
+        if not getattr(settings, "LLM_IO_SENSITIVE_FILTER_ENABLED", True):
+            return None
+
+        configured = (
+            getattr(settings, "LLM_INPUT_SENSITIVE_PATTERNS", "")
+            if direction == "input"
+            else getattr(settings, "LLM_OUTPUT_SENSITIVE_PATTERNS", "")
+        )
+        patterns = [p.strip() for p in configured.split(",") if p.strip()]
+
+        for pattern in patterns:
+            try:
+                if re.search(pattern, text, flags=re.IGNORECASE):
+                    return f"matched pattern: {pattern}"
+            except re.error:
+                if pattern.lower() in text.lower():
+                    return f"matched keyword: {pattern}"
+        return None
+
+    @staticmethod
+    def _law_source_unavailable_reason(context: Dict[str, Any]) -> Optional[str]:
+        if context.get("requires_law_source") and not context.get("has_labor_law"):
+            return context.get("refusal_reason") or (
+                "此問題涉及法規判斷，但法規來源目前不可用，為避免錯誤法規建議，暫不提供結論。"
+            )
+        return None
 
     async def contextualize_query(
         self, query: str, history: List[Dict[str, str]]
@@ -573,6 +726,34 @@ class ChatOrchestrator:
         
         新增 conversation_id / history 參數以支援多輪對話。
         """
+        block_reason = self._guardrail_block_reason(question)
+        if block_reason:
+            logger.warning("Guardrail blocked suspicious query: %s", block_reason)
+            return {
+                "request_id": str(uuid.uuid4()),
+                "question": question,
+                "company_policy": None,
+                "labor_law": None,
+                "answer": "為確保資料與系統安全，此問題包含疑似越權或提示詞操控指令，無法直接執行。請改為具體的人資制度或法規問題。",
+                "sources": [],
+                "notes": ["Guardrail 已攔截疑似 Prompt Injection"],
+                "disclaimer": "本回答僅供參考，不構成正式法律意見。如有具體情況，請諮詢專業法律顧問。",
+            }
+
+        input_sensitive = self._sensitive_content_reason(question, direction="input")
+        if input_sensitive:
+            logger.warning("Sensitive input blocked in process_query: %s", input_sensitive)
+            return {
+                "request_id": str(uuid.uuid4()),
+                "question": question,
+                "company_policy": None,
+                "labor_law": None,
+                "answer": "此問題包含敏感資訊請求，為保護資料安全已拒絕處理。請移除敏感資料後再提問。",
+                "sources": [],
+                "notes": ["Sensitive IO filter 已攔截輸入"],
+                "disclaimer": "本回答僅供參考，不構成正式法律意見。如有具體情況，請諮詢專業法律顧問。",
+            }
+
         structured = try_structured_answer(tenant_id, question, history=history)
         if structured:
             return {
@@ -596,6 +777,19 @@ class ChatOrchestrator:
             question=effective_question,
             top_k=top_k,
         )
+
+        law_unavailable_reason = self._law_source_unavailable_reason(ctx)
+        if law_unavailable_reason:
+            return {
+                "request_id": ctx["request_id"],
+                "question": question,
+                "company_policy": ctx["company_policy_raw"],
+                "labor_law": ctx["labor_law_raw"],
+                "answer": law_unavailable_reason,
+                "sources": ctx["sources"],
+                "notes": ["法規來源失效，已觸發安全拒答"],
+                "disclaimer": ctx["disclaimer"],
+            }
 
         # 生成回答（非串流）
         result = {
@@ -623,7 +817,15 @@ class ChatOrchestrator:
                 result["answer"] = await self._generate_answer(
                     question, ctx, history=history
                 )
-                result["notes"].append("由 AI 根據檢索結果生成回答")
+                output_sensitive = self._sensitive_content_reason(
+                    result["answer"], direction="output"
+                )
+                if output_sensitive:
+                    logger.warning("Sensitive output blocked in process_query: %s", output_sensitive)
+                    result["answer"] = "回覆內容含敏感資訊，已由安全機制中止輸出。"
+                    result["notes"].append("Sensitive IO filter 已攔截輸出")
+                else:
+                    result["notes"].append("由 AI 根據檢索結果生成回答")
             except Exception as e:
                 logger.warning(f"LLM 回答生成失敗，回退到模板: {e}")
                 result["answer"] = self._fallback_answer(ctx)
@@ -661,14 +863,14 @@ class ChatOrchestrator:
             history_msgs = []
             for msg in reversed(history):
                 # 粗估 1 中文字 ≈ 2 tokens
-                msg_tokens = len(msg["content"])
+                msg_tokens = self._estimate_tokens(msg["content"])
                 if total_tokens + msg_tokens > max_history_tokens:
                     break
                 history_msgs.insert(0, {"role": msg["role"], "content": msg["content"]})
                 total_tokens += msg_tokens
             messages.extend(history_msgs)
 
-        context_text = "\n\n".join(context["context_parts"])
+        history_tokens = sum(self._estimate_tokens(m.get("content", "")) for m in messages)
         history_summary = self._format_history_summary(history)
         calc_guidance = self._build_calc_guidance(question)
         arbitration = context.get("arbitration", {})
@@ -693,22 +895,41 @@ class ChatOrchestrator:
             f"conflict_mode={conflict_mode}。"
         )
 
-        user_content = f"問題：{question}\n\n參考資料：\n{context_text}\n\n請根據上述參考資料回答問題。"
-        user_content += f"\n\n{arbitration_text}\n衝突處理規則：{conflict_rule}"
+        user_prefix = f"問題：{question}\n\n參考資料：\n"
         if history_summary:
-            user_content = f"對話歷史摘要：\n{history_summary}\n\n" + user_content
+            user_prefix = f"對話歷史摘要：\n{history_summary}\n\n" + user_prefix
+
+        user_suffix = "\n\n請根據上述參考資料回答問題。"
+        user_suffix += f"\n\n{arbitration_text}\n衝突處理規則：{conflict_rule}"
         if calc_guidance:
-            user_content += f"\n\n計算與判斷提示：\n{calc_guidance}"
+            user_suffix += f"\n\n計算與判斷提示：\n{calc_guidance}"
         # 明確列出已找到的法條，要求 LLM 逐一引用
         law_sources = [
             s["title"] for s in context.get("sources", [])
             if s.get("type") == "law" and "Core API" not in s.get("title", "")
         ]
         if law_sources:
-            user_content += (
+            user_suffix += (
                 f"\n\n⚠️ 以下法條已在參考資料中明確標示，請務必在回答中引用（不得省略）："
                 f"{'、'.join(law_sources)}"
             )
+
+        max_input_tokens = int(getattr(settings, "LLM_MAX_INPUT_TOKENS", 6000))
+        reserve_tokens = int(getattr(settings, "LLM_CONTEXT_RESERVE_TOKENS", 1800))
+        base_tokens = (
+            history_tokens
+            + self._estimate_tokens(user_prefix)
+            + self._estimate_tokens(user_suffix)
+        )
+        context_budget = max(200, max_input_tokens - reserve_tokens - base_tokens)
+        context_text, context_truncated = self._apply_context_budget(
+            context.get("context_parts", []),
+            context_budget,
+        )
+        if context_truncated:
+            user_suffix += "\n\n（系統提醒：參考資料過長，已自動裁剪至模型可處理範圍。）"
+
+        user_content = f"{user_prefix}{context_text}{user_suffix}"
         messages.append({"role": "user", "content": user_content})
 
         return messages
