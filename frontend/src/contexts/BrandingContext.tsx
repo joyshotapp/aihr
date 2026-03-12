@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { publicApi } from '../api'
+import { publicApi, companyApi } from '../api'
 
 interface Branding {
   tenant_name: string
@@ -59,17 +59,34 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding>(defaultBranding)
 
   useEffect(() => {
-    // Resolve branding from current domain
-    const domain = window.location.hostname
-    publicApi
-      .branding({ domain: domain !== 'localhost' ? domain : undefined })
-      .then((data: Branding) => {
-        setBranding(data)
-        applyBrandingCSS(data)
-      })
-      .catch(() => {
-        // Silently fall back to defaults
-      })
+    const token = localStorage.getItem('token')
+    if (token) {
+      // Authenticated: load branding from company API (includes custom colors)
+      companyApi
+        .branding()
+        .then((data: Branding) => {
+          setBranding(data)
+          applyBrandingCSS(data)
+        })
+        .catch(() => {
+          // Fall back to public API on error
+          const domain = window.location.hostname
+          publicApi
+            .branding({ domain: domain !== 'localhost' ? domain : undefined })
+            .then((d: Branding) => { setBranding(d); applyBrandingCSS(d) })
+            .catch(() => {})
+        })
+    } else {
+      // Unauthenticated (login page): resolve from public domain lookup
+      const domain = window.location.hostname
+      publicApi
+        .branding({ domain: domain !== 'localhost' ? domain : undefined })
+        .then((data: Branding) => {
+          setBranding(data)
+          applyBrandingCSS(data)
+        })
+        .catch(() => {})
+    }
   }, [])
 
   return (

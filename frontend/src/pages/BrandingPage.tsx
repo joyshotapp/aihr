@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react'
 import { companyApi } from '../api'
-import { Palette, Save, Eye, MessageSquare, LayoutDashboard } from 'lucide-react'
+import { Palette, Save, Eye, MessageSquare, LayoutDashboard, RotateCcw } from 'lucide-react'
+
+const DEFAULT_BRANDING = {
+  brand_name: '',
+  brand_logo_url: '',
+  brand_primary_color: '#2563eb',
+  brand_secondary_color: '#1e40af',
+  brand_favicon_url: '',
+}
 
 interface BrandingData {
   brand_name: string
@@ -11,14 +19,9 @@ interface BrandingData {
 }
 
 export default function BrandingPage() {
-  const [form, setForm] = useState<BrandingData>({
-    brand_name: '',
-    brand_logo_url: '',
-    brand_primary_color: '#2563eb',
-    brand_secondary_color: '#1e40af',
-    brand_favicon_url: '',
-  })
+  const [form, setForm] = useState<BrandingData>(DEFAULT_BRANDING)
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
@@ -32,6 +35,21 @@ export default function BrandingPage() {
       })
     })
   }, [])
+
+  const handleReset = async () => {
+    if (!confirm('確定要恢復原廠顏色設定嗎？這將清除所有品牌自訂外觀。')) return
+    setResetting(true)
+    setMsg('')
+    try {
+      await companyApi.updateBranding(DEFAULT_BRANDING as unknown as Record<string, unknown>)
+      setForm(DEFAULT_BRANDING)
+      setMsg('已恢復原廠設定。')
+    } catch (e: any) {
+      setMsg(e?.response?.data?.detail || '重置失敗')
+    } finally {
+      setResetting(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -183,14 +201,24 @@ export default function BrandingPage() {
           {msg && (
             <p className={`text-sm ${msg.includes('成功') || msg.includes('已儲存') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>
           )}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? '儲存中...' : '儲存品牌設定'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving || resetting}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? '儲存中...' : '儲存品牌設定'}
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={saving || resetting}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {resetting ? '重置中...' : '恢復原廠設定'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
