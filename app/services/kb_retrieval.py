@@ -90,6 +90,7 @@ class KnowledgeBaseRetriever:
                 self._redis = redis_lib.Redis(
                     host=settings.REDIS_HOST,
                     port=settings.REDIS_PORT,
+                    password=getattr(settings, "REDIS_PASSWORD", None) or None,
                     db=1,  # 用 db=1 做檢索快取（db=0 給 Celery）
                     decode_responses=True,
                     socket_connect_timeout=2,
@@ -116,7 +117,7 @@ class KnowledgeBaseRetriever:
         query: str,
         top_k: int = 5,
         mode: str = "hybrid",
-        min_score: float = 0.0,
+        min_score: float = settings.RETRIEVAL_MIN_SCORE,
         rerank: bool = True,
         use_cache: bool = True,
         filter_dict: Optional[Dict] = None,

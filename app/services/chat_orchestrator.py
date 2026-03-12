@@ -218,11 +218,15 @@ class ChatOrchestrator:
         hints: List[str] = []
         if any(k in question for k in ["績效", "考核", "KPI"]):
             hints.append("績效考核辦法")
+        if any(k in question for k in ["解僱", "終止契約", "開除"]):
+            hints.append("解僱 終止勞動契約 資遣")
         if any(k in question for k in ["報帳", "計程車", "憑證", "發票", "出差"]):
             hints.append("報帳作業規範")
         if any(k in question for k in ["新人", "報到", "到職", "試用期"]):
             hints.append("新人到職 試用期")
-        if any(k in question for k in ["特休", "婚假", "喪假", "生理假", "產假",
+        if "喪假" in question:
+            hints.append("喪假 父母 配偶 祖父母 天數")
+        if any(k in question for k in ["特休", "婚假", "生理假", "產假",
                                         "陪產", "請假", "年假", "特別休假", "假期"]):
             hints.append("請假規定 特休假")
         if any(k in question for k in ["年終獎金", "獎懲", "獎金"]):

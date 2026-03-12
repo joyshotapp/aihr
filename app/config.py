@@ -1,6 +1,6 @@
 import secrets
 import warnings
-from typing import List, Union
+from typing import List, Optional, Union
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+    REDIS_PASSWORD: Optional[str] = None
     REDIS_SOCKET_CONNECT_TIMEOUT: int = 2   # 秒
     REDIS_SOCKET_TIMEOUT: int = 2           # 秒
     REDIS_SOCKET_KEEPALIVE: bool = True
@@ -140,7 +141,7 @@ class Settings(BaseSettings):
 
     # Retrieval
     RETRIEVAL_MODE: str = "hybrid"         # semantic / keyword / hybrid
-    RETRIEVAL_MIN_SCORE: float = 0.0       # 最低相似度閾值
+    RETRIEVAL_MIN_SCORE: float = 0.35      # 最低相似度閾值（Voyage rerank 0~1；低於此分數的 chunk 不送入 LLM）
     RETRIEVAL_RERANK: bool = True          # 是否啟用重排序
     RETRIEVAL_CACHE_TTL: int = 300         # 快取秒數
     RETRIEVAL_TOP_K: int = 5               # 預設返回數量
