@@ -328,7 +328,7 @@ server {
 # Default catch-all (return 444 to close connection)
 # ================================================================
 server {
-    listen 80 default_server;
+    listen 80;
     server_name _;
     return 444;
 }
