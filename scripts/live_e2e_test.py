@@ -33,7 +33,11 @@ def _req(method, path, token="", **kwargs):
         headers["Authorization"] = f"Bearer {token}"
     try:
         r = requests.request(method, url, headers=headers, timeout=TIMEOUT, **kwargs)
-        return r.json() if r.text else {}, r.status_code
+        try:
+            body = r.json() if r.text else {}
+        except Exception:
+            body = {"raw": r.text}
+        return body, r.status_code
     except Exception as e:
         return {"_error": str(e)}, 0
 

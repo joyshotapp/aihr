@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import csv
+import logging
 import math
 import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from io import StringIO
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 from app.db.session import SessionLocal
 from app.models.document import Document, DocumentChunk
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -67,8 +71,8 @@ class EmployeeRoster:
             name = (row.get("姓名") or "").strip()
             dept = (row.get("部門") or "").strip()
             salary = (row.get("月薪") or "").strip()
-            years = (row.get("年資(年)") or "").strip()
-            key = (emp_id, name, dept, salary, years)
+            hire_or_years = (row.get("到職日期") or row.get("年資(年)") or "").strip()
+            key = (emp_id, name, dept, salary, hire_or_years)
             if key in seen:
                 continue
             seen.add(key)
@@ -132,6 +136,22 @@ class EmployeeRoster:
         except ValueError:
             return None
 
+    def get_years_of_service(self, emp: Dict[str, str]) -> Optional[float]:
+        years = self._to_float(emp.get("年資(年)", ""))
+        if years is not None:
+            return years
+        hire_date_str = (emp.get("到職日期") or "").strip()
+        if not hire_date_str:
+            return None
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+            try:
+                hire_date = datetime.strptime(hire_date_str, fmt).date()
+                delta = date.today() - hire_date
+                return round(delta.days / 365.25, 1)
+            except ValueError:
+                continue
+        return None
+
     def count_gender(self) -> Tuple[int, int]:
         female = sum(1 for r in self.rows if r.get("性別") == "女")
         male = sum(1 for r in self.rows if r.get("性別") == "男")
@@ -159,7 +179,7 @@ class EmployeeRoster:
         best_id = None
         best_years = None
         for r in self.rows:
-            years = self._to_float(r.get("年資(年)", ""))
+            years = self.get_years_of_service(r)
             if years is None:
                 continue
             if best_years is None or years > best_years:
@@ -303,6 +323,9 @@ class PayrollSlip:
         if gross is None or deductions is None:
             return None
         return gross - deductions
+
+    def extract_overtime_pay(self) -> Optional[int]:
+        return self._extract_amount(["加班費", "延長工時津貼", "加班津貼"])
 
 
 def _round_years_half(years: float) -> float:
@@ -472,6 +495,12 @@ class HealthReport:
             parts.append("輕度近視")
         return "、".join(parts)
 
+    def doctor_recommendations(self) -> Optional[str]:
+        match = re.search(r"【醫師建議】(.*?)(?:【|═{3,}|\Z)", self.text, re.S)
+        if match:
+            return match.group(1).strip()
+        return None
+
 
 class RegistrationForm:
     def __init__(self, text: str, source_filename: str):
@@ -533,8 +562,10 @@ def try_structured_answer(
     question: str,
     history: Optional[List[Dict[str, str]]] = None,
 ) -> Optional[StructuredAnswer]:
+    logger.info("try_structured_answer called: q=%s", question[:80])
     roster = EmployeeRoster.load(tenant_id)
     if not roster:
+        logger.info("structured_answers: no roster found for tenant %s", tenant_id)
         return None
 
     emp_id, emp_name = _find_employee_in_question(roster, question)
@@ -711,6 +742,22 @@ def try_structured_answer(
                 }],
             )
 
+    if ("醫生" in question or "醫師" in question) and "建議" in question:
+        report = HealthReport.load(tenant_id)
+        if report:
+            recs = report.doctor_recommendations()
+            if recs:
+                answer = f"根據健檢報告中的醫師建議：\n{recs}"
+                return StructuredAnswer(
+                    answer=answer,
+                    sources=[{
+                        "type": "policy",
+                        "title": report.source_filename,
+                        "snippet": "醫師建議",
+                        "score": 1.0,
+                    }],
+                )
+
     if "特休" in question and ("核准" in question or "誰核准" in question or "需要誰" in question):
         form = LeaveForm.load(tenant_id)
         if form:
@@ -774,7 +821,7 @@ def try_structured_answer(
             emp = roster.find_employee(emp_id=emp_id, name=emp_name)
             if not emp:
                 return None
-            years = roster._to_float(emp.get("年資(年)", ""))
+            years = roster.get_years_of_service(emp)
             if years is None:
                 return None
             days = _annual_leave_days(years)
@@ -797,7 +844,7 @@ def try_structured_answer(
     if "資遣費" in question and (emp_id or emp_name):
         emp = roster.find_employee(emp_id=emp_id, name=emp_name)
         if emp:
-            years = roster._to_float(emp.get("年資(年)", ""))
+            years = roster.get_years_of_service(emp)
             salary = roster._to_float(emp.get("月薪", ""))
             if years is not None and salary is not None:
                 rounded_years = _round_years_half(years)
@@ -924,6 +971,45 @@ def try_structured_answer(
         sources = [source] if source else []
         return StructuredAnswer(answer=answer, sources=sources)
 
+    if (emp_id or emp_name) and ("部門" in question or "薪水" in question or "薪資" in question or "月薪" in question or "職稱" in question):
+        emp = roster.find_employee(emp_id=emp_id, name=emp_name)
+        if emp:
+            name = emp.get("姓名", "")
+            prefix = f"{emp.get('員工編號', '')} " if emp.get("員工編號") else ""
+            parts = [f"{prefix}{name}"]
+            if emp.get("部門"):
+                parts.append(f"部門：{emp.get('部門')}")
+            if emp.get("月薪"):
+                parts.append(f"月薪：{emp.get('月薪')} 元")
+            if emp.get("職稱"):
+                parts.append(f"職稱：{emp.get('職稱')}")
+            answer = "，".join(parts) + "。"
+            return StructuredAnswer(
+                answer=answer,
+                sources=[{
+                    "type": "policy",
+                    "title": roster.source_filename,
+                    "snippet": "員工名冊（員工基本資料）",
+                    "score": 1.0,
+                }],
+            )
+
+    if "加班費" in question and ("多少" in question or "領" in question):
+        slip = PayrollSlip.load(tenant_id)
+        if slip:
+            overtime = slip.extract_overtime_pay()
+            if overtime is not None:
+                answer = f"本月加班費為 {overtime:,} 元，依薪資條明細計算。"
+                return StructuredAnswer(
+                    answer=answer,
+                    sources=[{
+                        "type": "policy",
+                        "title": slip.source_filename,
+                        "snippet": "加班費明細",
+                        "score": 1.0,
+                    }],
+                )
+
     if "實領" in question and ("薪" in question or "薪水" in question or "薪資" in question):
         slip = PayrollSlip.load(tenant_id)
         if slip:
@@ -960,4 +1046,5 @@ def try_structured_answer(
             sources = [source] if source else []
             return StructuredAnswer(answer=answer, sources=sources)
 
+    logger.info("structured_answers: no handler matched for q=%s", question[:80])
     return None
