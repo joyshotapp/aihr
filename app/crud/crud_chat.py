@@ -1,3 +1,4 @@
+import warnings
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -7,6 +8,10 @@ from app.models.feedback import ChatFeedback
 
 
 def get_conversation(db: Session, conversation_id: UUID) -> Optional[Conversation]:
+    warnings.warn(
+        "crud_chat.get_conversation() has no tenant_id filter. Use get_conversation_for_user() instead.",
+        DeprecationWarning, stacklevel=2,
+    )
     return db.query(Conversation).filter(Conversation.id == conversation_id).first()
 
 
@@ -107,8 +112,18 @@ def get_conversation_messages(
     ).order_by(Message.created_at).offset(skip).limit(limit).all()
 
 
-def delete_conversation(db: Session, conversation_id: UUID) -> bool:
-    conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+def delete_conversation(db: Session, conversation_id: UUID, *, tenant_id: UUID = None) -> bool:
+    if tenant_id is not None:
+        conv = db.query(Conversation).filter(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == tenant_id,
+        ).first()
+    else:
+        warnings.warn(
+            "crud_chat.delete_conversation() called without tenant_id.",
+            DeprecationWarning, stacklevel=2,
+        )
+        conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if conv:
         # 刪除相關訊息
         db.query(Message).filter(Message.conversation_id == conversation_id).delete()

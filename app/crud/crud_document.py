@@ -1,5 +1,6 @@
 import os
 import hashlib
+import warnings
 from typing import List
 from uuid import UUID
 from sqlalchemy.orm import Session
@@ -8,6 +9,10 @@ from app.schemas.document import DocumentCreate, DocumentUpdate
 
 
 def get(db: Session, document_id: UUID) -> Document:
+    warnings.warn(
+        "crud_document.get() has no tenant_id filter. Use get_for_tenant() instead.",
+        DeprecationWarning, stacklevel=2,
+    )
     return db.query(Document).filter(Document.id == document_id).first()
 
 
@@ -49,8 +54,18 @@ def update(db: Session, *, db_obj: Document, obj_in: DocumentUpdate) -> Document
     return db_obj
 
 
-def delete(db: Session, *, document_id: UUID) -> bool:
-    doc = db.query(Document).filter(Document.id == document_id).first()
+def delete(db: Session, *, document_id: UUID, tenant_id: UUID = None) -> bool:
+    if tenant_id is not None:
+        doc = db.query(Document).filter(
+            Document.id == document_id,
+            Document.tenant_id == tenant_id,
+        ).first()
+    else:
+        warnings.warn(
+            "crud_document.delete() called without tenant_id. Use tenant_id parameter.",
+            DeprecationWarning, stacklevel=2,
+        )
+        doc = db.query(Document).filter(Document.id == document_id).first()
     if doc:
         # Delete associated chunks
         db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()

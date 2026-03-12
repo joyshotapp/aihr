@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "change_this"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8 hours
     ALGORITHM: str = "HS256"
 
     # ── First superuser (used by scripts/initial_data.py) ──
@@ -69,11 +69,11 @@ class Settings(BaseSettings):
     # Gemini（用於 Generation 回答生成 + HyDE 查詢擴展）
     LLM_BACKEND: str = "gemini"  # gemini / core
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash-preview-04-17"  # Generation 使用的模型
+    GEMINI_MODEL: str = "gemini-3-flash-preview"  # Generation 使用的模型
     LLM_TEMPERATURE: float = 0.3     # 回答生成溫度（低 = 更精確）
-    LLM_MAX_TOKENS: int = 1500       # 回答最大 token 數
-    LLM_MAX_INPUT_TOKENS: int = 6000    # prompts + context 合計上限（預估）
-    LLM_CONTEXT_RESERVE_TOKENS: int = 1800  # 預留給模型輸出與安全緩衝
+    LLM_MAX_TOKENS: int = 8192       # 回答最大 token 數（含 thinking tokens）
+    LLM_MAX_INPUT_TOKENS: int = 32000   # prompts + context 合計上限
+    LLM_CONTEXT_RESERVE_TOKENS: int = 2000  # 預留給模型輸出與安全緩衝
     LLM_GUARDRAIL_ENABLED: bool = True
     LLM_GUARDRAIL_BLOCK_PATTERNS: str = (
         "ignore previous instructions,"

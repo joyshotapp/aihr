@@ -276,7 +276,7 @@ def delete_document(
     
     # 刪除資料庫記錄
     if current_user.is_superuser:
-        crud_document.delete(db, document_id=document_id)
+        crud_document.delete(db, document_id=document_id, tenant_id=document.tenant_id)
     else:
         crud_document.delete_for_tenant(
             db,

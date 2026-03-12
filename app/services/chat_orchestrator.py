@@ -144,8 +144,7 @@ class ChatOrchestrator:
                 # run_in_executor：search() 含同步 Voyage embed/rerank 呼叫
                 # 若直接在 async def 中呼叫會阻塞 event loop，
                 # 導致 asyncio.gather() 無法真正並行。
-                loop = asyncio.get_event_loop()
-                results = await loop.run_in_executor(
+                results = await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: self.kb_retriever.search(
                         tenant_id=tenant_id,
@@ -172,9 +171,8 @@ class ChatOrchestrator:
             asyncio.create_task(get_labor_law()),
         )
 
-        # 內規補強：根據問題關鍵字做檔名導向檢索（同樣用 executor 避免阻塞）
-        loop = asyncio.get_event_loop()
-        boosted_results = await loop.run_in_executor(
+        # 內規補強：根據問題關鍵字做語意補強檢索（同樣用 executor 避免阻塞）
+        boosted_results = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: self._policy_boost_search(tenant_id, question, top_k),
         )
@@ -195,52 +193,51 @@ class ChatOrchestrator:
     def _policy_boost_search(
         self, tenant_id: UUID, question: str, top_k: int
     ) -> List[Dict[str, Any]]:
-        filenames = self._policy_hint_filenames(question)
-        if not filenames:
+        keywords = self._policy_hint_keywords(question)
+        if not keywords:
             return []
         try:
+            # 用語意查詢片段做補強搜尋（不限制檔名）
+            boost_query = " ".join(keywords)
             return self.kb_retriever.search(
                 tenant_id=tenant_id,
-                query=question,
+                query=boost_query,
                 top_k=top_k,
                 mode="semantic",
                 rerank=False,
-                filter_dict={"filename": filenames},
             )
         except Exception:
             return []
 
     @staticmethod
-    def _policy_hint_filenames(question: str) -> List[str]:
+    def _policy_hint_keywords(question: str) -> List[str]:
+        """
+        根據問題關鍵字回傳適合做語意補強的搜尋查詢。
+        不再硬編碼檔名，改為回傳語意查詢片段讓 retriever 做廣泛搜尋。
+        """
         hints: List[str] = []
-        if any(k in question for k in ["績效", "考核"]):
-            hints.append("員工手冊-第一章-總則.pdf")
-        if any(k in question for k in ["報帳", "計程車", "憑證", "發票"]):
-            hints.append("報帳作業規範.pdf")
+        if any(k in question for k in ["績效", "考核", "KPI"]):
+            hints.append("績效考核辦法")
+        if any(k in question for k in ["報帳", "計程車", "憑證", "發票", "出差"]):
+            hints.append("報帳作業規範")
         if any(k in question for k in ["新人", "報到", "到職", "試用期"]):
-            hints.extend(["新人到職SOP.pdf", "勞動契約書-謝雅玲.pdf"])
-        if any(k in question for k in ["特休", "婚假", "喪假", "生理假", "產假", "陪產", "請假"]):
-            hints.extend(["員工手冊-第一章-總則.pdf", "請假單範本-E012-周秀蘭.pdf"])
-        if "年終獎金" in question or "獎懲" in question:
-            hints.extend(["獎懲管理辦法.pdf", "勞動契約書-謝雅玲.pdf"])
-        if "加班" in question:
-            hints.extend(["員工手冊-第一章-總則.pdf", "勞動契約書-謝雅玲.pdf"])
-        if "交通津貼" in question or "津貼" in question:
-            hints.append("員工手冊-第一章-總則.pdf")
-        if "勞保" in question or "健保" in question:
-            hints.append("202601-E007-劉志明-薪資條.pdf")
-        if "健檢" in question or "健康檢查" in question:
-            hints.append("健康檢查報告-E016-高淑珍.pdf")
-        if "薪資" in question or "薪水" in question or "實領" in question:
-            hints.append("202601-E007-劉志明-薪資條.pdf")
-        # 去重保持順序
-        seen = set()
-        ordered = []
-        for name in hints:
-            if name not in seen:
-                seen.add(name)
-                ordered.append(name)
-        return ordered
+            hints.append("新人到職 試用期")
+        if any(k in question for k in ["特休", "婚假", "喪假", "生理假", "產假",
+                                        "陪產", "請假", "年假", "特別休假", "假期"]):
+            hints.append("請假規定 特休假")
+        if any(k in question for k in ["年終獎金", "獎懲", "獎金"]):
+            hints.append("獎懲管理 年終獎金")
+        if any(k in question for k in ["加班", "延長工時"]):
+            hints.append("加班規定 延長工時")
+        if any(k in question for k in ["交通津貼", "津貼", "補貼"]):
+            hints.append("交通津貼 補貼")
+        if any(k in question for k in ["勞保", "健保", "保費"]):
+            hints.append("勞保 健保 保費")
+        if any(k in question for k in ["健檢", "健康檢查", "體檢"]):
+            hints.append("健康檢查報告")
+        if any(k in question for k in ["薪資", "薪水", "實領", "月薪", "底薪"]):
+            hints.append("薪資條 薪資明細")
+        return hints
 
     @staticmethod
     def _merge_policy_results(
@@ -746,7 +743,9 @@ class ChatOrchestrator:
                 "disclaimer": "本回答僅供參考，不構成正式法律意見。如有具體情況，請諮詢專業法律顧問。",
             }
 
-        structured = try_structured_answer(tenant_id, question, history=history)
+        structured = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: try_structured_answer(tenant_id, question, history=history)
+        )
         if structured:
             return {
                 "request_id": str(uuid.uuid4()),

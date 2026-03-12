@@ -94,7 +94,9 @@ app = FastAPI(
 )
 
 # Set all CORS enabled origins
-cors_origins = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:8000"]
+cors_origins: list[str] = []
+if not settings.is_production:
+    cors_origins.extend(["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:8000"])
 if settings.BACKEND_CORS_ORIGINS:
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
         cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])

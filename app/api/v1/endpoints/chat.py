@@ -180,7 +180,7 @@ async def chat_stream(
 
         except Exception as e:
             logger.exception(f"chat_stream event_generator 錯誤: {e}")
-            yield _sse({"type": "error", "content": f"處理失敗：{str(e)}"})
+            yield _sse({"type": "error", "content": "處理失敗，請稍後再試。"})
 
 
     headers = {

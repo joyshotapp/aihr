@@ -409,17 +409,24 @@ class KnowledgeBaseRetriever:
         if not semantic_results:
             return keyword_results
 
-        # RRF 融合
+        # RRF 融合 — 使用 document_id:chunk_index 作為統一 key
         rrf_scores: Dict[str, float] = {}
         result_map: Dict[str, Dict[str, Any]] = {}
 
+        def _canonical_key(r: Dict[str, Any], fallback: str) -> str:
+            doc_id = r.get("document_id", "")
+            ci = r.get("chunk_index")
+            if doc_id and ci is not None:
+                return f"{doc_id}:{ci}"
+            return r.get("id", fallback)
+
         for rank, r in enumerate(semantic_results):
-            key = r.get("id", f"sem-{rank}")
+            key = _canonical_key(r, f"sem-{rank}")
             rrf_scores[key] = rrf_scores.get(key, 0) + 1.0 / (rrf_k + rank + 1)
             result_map[key] = r
 
         for rank, r in enumerate(keyword_results):
-            key = r.get("id", f"kw-{rank}")
+            key = _canonical_key(r, f"kw-{rank}")
             rrf_scores[key] = rrf_scores.get(key, 0) + 1.0 / (rrf_k + rank + 1)
             if key not in result_map:
                 result_map[key] = r
