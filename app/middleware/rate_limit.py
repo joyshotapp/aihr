@@ -8,6 +8,7 @@ API Rate Limiting 中間件（T3-4）
 """
 import logging
 import time
+import ipaddress
 from typing import Optional, Tuple
 
 import redis
@@ -19,6 +20,28 @@ from app.config import settings
 from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_client_ip(request: Request) -> str:
+    """Resolve the real client IP when running behind nginx/proxies."""
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        first_hop = forwarded_for.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+
+    return request.client.host if request.client else "unknown"
+
+
+def _is_loopback_ip(value: str) -> bool:
+    try:
+        return ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        return False
 
 
 # ═══════════════════════════════════════════
@@ -158,7 +181,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path in self.SKIP_PATHS or path.startswith("/docs"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = _extract_client_ip(request)
+
+        # Allow local server-side verification traffic to pass without tripping abuse locks.
+        if _is_loopback_ip(client_ip):
+            return await call_next(request)
 
         try:
             # 1. 濫用檢查
