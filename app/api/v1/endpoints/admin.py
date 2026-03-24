@@ -186,23 +186,48 @@ def list_all_tenants(
     current_user: User = Depends(require_superuser),
 ) -> Any:
     """全租戶列表（含用量摘要）"""
-    q = db.query(Tenant)
+    # Subqueries to avoid N+1 (was: 3 queries per tenant in a loop)
+    user_counts = (
+        db.query(User.tenant_id, func.count(User.id).label("cnt"))
+        .group_by(User.tenant_id)
+        .subquery()
+    )
+    doc_counts = (
+        db.query(Document.tenant_id, func.count(Document.id).label("cnt"))
+        .group_by(Document.tenant_id)
+        .subquery()
+    )
+    usage_agg = (
+        db.query(
+            UsageRecord.tenant_id,
+            func.count(UsageRecord.id).label("actions"),
+            func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
+        )
+        .group_by(UsageRecord.tenant_id)
+        .subquery()
+    )
+
+    q = (
+        db.query(
+            Tenant,
+            func.coalesce(user_counts.c.cnt, 0).label("user_count"),
+            func.coalesce(doc_counts.c.cnt, 0).label("doc_count"),
+            func.coalesce(usage_agg.c.actions, 0).label("total_actions"),
+            func.coalesce(usage_agg.c.cost, 0).label("total_cost"),
+        )
+        .outerjoin(user_counts, Tenant.id == user_counts.c.tenant_id)
+        .outerjoin(doc_counts, Tenant.id == doc_counts.c.tenant_id)
+        .outerjoin(usage_agg, Tenant.id == usage_agg.c.tenant_id)
+    )
     if status:
         q = q.filter(Tenant.status == status)
     if search:
         q = q.filter(Tenant.name.ilike(f"%{search}%"))
 
-    tenants = q.order_by(Tenant.created_at.desc()).offset(skip).limit(limit).all()
+    rows = q.order_by(Tenant.created_at.desc()).offset(skip).limit(limit).all()
 
     result = []
-    for t in tenants:
-        user_count = db.query(func.count(User.id)).filter(User.tenant_id == t.id).scalar() or 0
-        doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == t.id).scalar() or 0
-        usage = db.query(
-            func.count(UsageRecord.id).label("actions"),
-            func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
-        ).filter(UsageRecord.tenant_id == t.id).first()
-
+    for t, user_count, doc_count, total_actions, total_cost in rows:
         result.append(TenantSummary(
             id=str(t.id),
             name=t.name,
@@ -211,8 +236,8 @@ def list_all_tenants(
             created_at=t.created_at,
             user_count=user_count,
             document_count=doc_count,
-            total_actions=usage.actions or 0,
-            total_cost=float(usage.cost or 0),
+            total_actions=total_actions,
+            total_cost=float(total_cost),
         ))
     return result
 
@@ -328,8 +353,12 @@ def search_users(
 ) -> Any:
     """跨租戶用戶搜尋"""
     from app.models.permission import Department
+    from sqlalchemy.orm import joinedload
 
-    q = db.query(User)
+    q = db.query(User).options(
+        joinedload(User.tenant),
+        joinedload(User.department),
+    )
     if search:
         q = q.filter(
             (User.email.ilike(f"%{search}%")) | (User.full_name.ilike(f"%{search}%"))
@@ -343,12 +372,6 @@ def search_users(
 
     result = []
     for u in users:
-        tenant = db.query(Tenant).filter(Tenant.id == u.tenant_id).first()
-        dept = None
-        if u.department_id:
-            dept_obj = db.query(Department).filter(Department.id == u.department_id).first()
-            dept = dept_obj.name if dept_obj else None
-
         result.append(AdminUserInfo(
             id=str(u.id),
             email=u.email,
@@ -356,8 +379,8 @@ def search_users(
             role=u.role,
             status=u.status,
             tenant_id=str(u.tenant_id),
-            tenant_name=tenant.name if tenant else None,
-            department_name=dept,
+            tenant_name=u.tenant.name if u.tenant else None,
+            department_name=u.department.name if u.department else None,
             created_at=u.created_at,
         ))
     return result

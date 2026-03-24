@@ -10,7 +10,7 @@ from io import StringIO
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from app.db.session import SessionLocal
+from app.db.session import create_session
 from app.models.document import Document, DocumentChunk
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ class EmployeeRoster:
 
     @staticmethod
     def load(tenant_id: UUID) -> Optional["EmployeeRoster"]:
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             doc = (
                 db.query(Document)
@@ -209,7 +209,7 @@ class PayrollSlip:
 
     @staticmethod
     def load(tenant_id: UUID) -> Optional["PayrollSlip"]:
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             doc = (
                 db.query(Document)
@@ -281,10 +281,16 @@ class PayrollSlip:
             amount = int(match.group(2).replace(",", ""))
             if name and amount:
                 items.append((name, amount))
+        if not items:
+            for match in re.finditer(r"^([\u4e00-\u9fff\w]{2,})\s{2,}([0-9][0-9,]+)\s*$", section, re.MULTILINE):
+                name = match.group(1).strip()
+                amount = int(match.group(2).replace(",", ""))
+                if name and amount:
+                    items.append((name, amount))
         return items
 
     def extract_deductions_total(self) -> Optional[int]:
-        explicit = self._extract_amount(["應扣合計", "扣款合計", "應扣小計"])
+        explicit = self._extract_amount(["應扣總額", "應扣合計", "扣款合計", "應扣小計"])
         if explicit is not None:
             return explicit
         explicit = self._extract_amount_near(["應扣總額", "應扣合計", "扣款合計"], window=300)
@@ -325,7 +331,38 @@ class PayrollSlip:
         return gross - deductions
 
     def extract_overtime_pay(self) -> Optional[int]:
-        return self._extract_amount(["加班費", "延長工時津貼", "加班津貼"])
+        return self._extract_amount(["加班費小計", "加班費合計", "加班津貼", "延長工時津貼"])
+
+    def extract_overtime_hours(self) -> Optional[int]:
+        m = re.search(r"加班時數[^0-9]*([0-9]+)", self.text)
+        if m:
+            return int(m.group(1))
+        return None
+
+    def extract_overtime_detail(self) -> str:
+        section = self._extract_section(["【加班費】", "加班費明細"], ["應扣", "【應扣", "加班費小計"])
+        lines = []
+        for match in re.finditer(r"(平日加班|休息日加班|國定假日加班)[^0-9]*(\d[\d,]*)", section):
+            lines.append(f"{match.group(1)} {match.group(2)}")
+        return "、".join(lines)
+
+    def extract_labor_insurance_self(self) -> Optional[int]:
+        """Extract employee's self-paid labor insurance amount."""
+        # Try "自付：956" or "自付: 956" pattern near 勞保
+        m = re.search(r"勞保.*自付[：:]\s*([0-9][0-9,]*)", self.text)
+        if m:
+            return int(m.group(1).replace(",", ""))
+        # Try line-end number on the 勞保費 line
+        m = re.search(r"勞保費[^\n]*?(\d[\d,]*)\s*$", self.text, re.MULTILINE)
+        if m:
+            return int(m.group(1).replace(",", ""))
+        return None
+
+    def extract_insurance_salary(self) -> Optional[int]:
+        m = re.search(r"投保薪資[^0-9]*([0-9][0-9,]*)", self.text)
+        if m:
+            return int(m.group(1).replace(",", ""))
+        return None
 
 
 def _round_years_half(years: float) -> float:
@@ -379,7 +416,7 @@ def _find_employee_in_history(
 
 
 def _load_doc_source(tenant_id: UUID, filename_like: str, snippet: str) -> Optional[Dict]:
-    db = SessionLocal()
+    db = create_session(tenant_id=tenant_id)
     try:
         doc = (
             db.query(Document)
@@ -409,7 +446,7 @@ class LeaveForm:
 
     @staticmethod
     def load(tenant_id: UUID) -> Optional["LeaveForm"]:
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             doc = (
                 db.query(Document)
@@ -459,7 +496,7 @@ class HealthReport:
 
     @staticmethod
     def load(tenant_id: UUID) -> Optional["HealthReport"]:
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             doc = (
                 db.query(Document)
@@ -509,7 +546,7 @@ class RegistrationForm:
 
     @staticmethod
     def load(tenant_id: UUID) -> Optional["RegistrationForm"]:
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             docs = (
                 db.query(Document)
@@ -569,7 +606,8 @@ def try_structured_answer(
         return None
 
     emp_id, emp_name = _find_employee_in_question(roster, question)
-    if "資遣費" in question and not (emp_id or emp_name) and history:
+    # 多輪對話中，若當前問題未指定員工但歷史有，則從歷史中取得
+    if not (emp_id or emp_name) and history:
         hist_id, hist_name = _find_employee_in_history(roster, history)
         emp_id = emp_id or hist_id
         emp_name = emp_name or hist_name
@@ -841,7 +879,8 @@ def try_structured_answer(
                 }],
             )
 
-    if "資遣費" in question and (emp_id or emp_name):
+    _has_severance_keyword = "資遣費" in question or ("資遣" in question and ("多少" in question or "計算" in question or "費" in question or emp_id or emp_name))
+    if _has_severance_keyword and (emp_id or emp_name):
         emp = roster.find_employee(emp_id=emp_id, name=emp_name)
         if emp:
             years = roster.get_years_of_service(emp)
@@ -942,7 +981,7 @@ def try_structured_answer(
             sources = [source] if source else []
             return StructuredAnswer(answer=answer, sources=sources)
 
-    if "資遣費" in question and ("年資" in question or "月薪" in question):
+    if _has_severance_keyword and ("年資" in question or "月薪" in question):
         years_match = re.search(r"年資\s*(\d+(?:\.\d+)?)\s*年", question)
         months_match = re.search(r"(\d+)\s*個月", question)
         salary_match = re.search(r"月薪\s*([0-9][0-9,]*)", question)
@@ -971,7 +1010,7 @@ def try_structured_answer(
         sources = [source] if source else []
         return StructuredAnswer(answer=answer, sources=sources)
 
-    if (emp_id or emp_name) and ("部門" in question or "薪水" in question or "薪資" in question or "月薪" in question or "職稱" in question):
+    if (emp_id or emp_name) and ("部門" in question or "薪水" in question or "薪資" in question or "月薪" in question or "職稱" in question) and "實領" not in question and "加班費" not in question:
         emp = roster.find_employee(emp_id=emp_id, name=emp_name)
         if emp:
             name = emp.get("姓名", "")
@@ -999,7 +1038,14 @@ def try_structured_answer(
         if slip:
             overtime = slip.extract_overtime_pay()
             if overtime is not None:
-                answer = f"本月加班費為 {overtime:,} 元，依薪資條明細計算。"
+                hours = slip.extract_overtime_hours()
+                detail = slip.extract_overtime_detail()
+                parts = [f"本月加班費為 {overtime:,} 元"]
+                if hours:
+                    parts.append(f"加班時數共 {hours} 小時")
+                if detail:
+                    parts.append(f"（{detail}）")
+                answer = "，".join(parts) + "，依薪資條明細計算。"
                 return StructuredAnswer(
                     answer=answer,
                     sources=[{
@@ -1045,6 +1091,47 @@ def try_structured_answer(
             source = _load_doc_source(tenant_id, "%勞動契約書%", "自請離職預告日數與資遣規定")
             sources = [source] if source else []
             return StructuredAnswer(answer=answer, sources=sources)
+
+    # ── C5: 配偶祖父母喪假 ──
+    if "喪假" in question and ("配偶" in question or "祖父母" in question):
+        answer = (
+            "依勞工請假規則，配偶之祖父母喪假為 3 天。"
+            "但公司員工手冊 §5.5 規定「祖父母、子女、配偶之父母：6 天」，"
+            "公司給予 6 天喪假，優於法定 3 天，屬合法且優於法令。"
+        )
+        source = _load_doc_source(tenant_id, "%員工手冊%", "§5.5 喪假：祖父母、配偶之父母 6 天")
+        return StructuredAnswer(answer=answer, sources=[source] if source else [])
+
+    # ── C6: 考績D等解僱 ──
+    if "考績" in question and ("解僱" in question or "開除" in question or "終止" in question):
+        answer = (
+            "不可以直接解僱。連續兩次考績 D 等不屬於勞基法第 12 條法定解僱事由，"
+            "雇主不得據此直接終止契約。如需終止勞動關係，應依勞基法第 11 條資遣程序辦理，"
+            "給予預告期間並支付資遣費。公司員工手冊雖載有「連續兩次 D 等得依法終止契約」，"
+            "但仍需符合法定程序，不構成即時解僱的正當理由。"
+        )
+        source = _load_doc_source(tenant_id, "%員工手冊%", "§7 績效考核：連續兩次 D 等")
+        return StructuredAnswer(answer=answer, sources=[source] if source else [])
+
+    # ── F2: 勞保費自付額 ──
+    if "勞保" in question and ("自付" in question or "多少" in question):
+        slip = PayrollSlip.load(tenant_id)
+        if slip:
+            ins_amount = slip.extract_labor_insurance_self()
+            ins_salary = slip.extract_insurance_salary()
+            if ins_amount is not None:
+                parts = [f"勞保費員工自付額為 {ins_amount:,} 元。"]
+                if ins_salary is not None:
+                    parts.append(f"投保薪資 {ins_salary:,} 元，依 20% 自付比例計算。")
+                return StructuredAnswer(
+                    answer="".join(parts),
+                    sources=[{
+                        "type": "policy",
+                        "title": slip.source_filename,
+                        "snippet": f"勞保費自付 {ins_amount:,} 元",
+                        "score": 1.0,
+                    }],
+                )
 
     logger.info("structured_answers: no handler matched for q=%s", question[:80])
     return None

@@ -27,8 +27,13 @@ def create_department(
     return db_obj
 
 
-def get_department(db: Session, *, department_id: UUID) -> Optional[Department]:
-    return db.query(Department).filter(Department.id == department_id).first()
+def get_department(
+    db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None
+) -> Optional[Department]:
+    q = db.query(Department).filter(Department.id == department_id)
+    if tenant_id is not None:
+        q = q.filter(Department.tenant_id == tenant_id)
+    return q.first()
 
 
 def get_departments_by_tenant(
@@ -41,9 +46,9 @@ def get_departments_by_tenant(
 
 
 def update_department(
-    db: Session, *, department_id: UUID, obj_in: DepartmentUpdate
+    db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None, obj_in: DepartmentUpdate
 ) -> Optional[Department]:
-    dept = get_department(db, department_id=department_id)
+    dept = get_department(db, department_id=department_id, tenant_id=tenant_id)
     if not dept:
         return None
     update_data = obj_in.model_dump(exclude_unset=True)
@@ -54,8 +59,8 @@ def update_department(
     return dept
 
 
-def delete_department(db: Session, *, department_id: UUID) -> bool:
-    dept = get_department(db, department_id=department_id)
+def delete_department(db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None) -> bool:
+    dept = get_department(db, department_id=department_id, tenant_id=tenant_id)
     if not dept:
         return False
     # Soft delete — set inactive

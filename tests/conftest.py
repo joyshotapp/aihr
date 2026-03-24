@@ -129,7 +129,11 @@ async def superuser_headers(client: AsyncClient):
         data={"username": SUPERUSER_EMAIL, "password": SUPERUSER_PASSWORD},
     )
     assert login.status_code == 200, f"Superuser login failed: {login.text}"
-    token = login.json()["access_token"]
+    # Cookie-based auth: extract token from response cookie, use Bearer fallback
+    token = login.cookies.get("unihr_access") or login.json().get("access_token")
+    assert token, "No access token in cookies or body"
+    # Clear client cookies so per-request Bearer headers take precedence
+    client.cookies.clear()
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -156,5 +160,9 @@ async def login_user(client: AsyncClient, email: str, password: str) -> dict:
         data={"username": email, "password": password},
     )
     assert resp.status_code == 200, f"Login failed for {email}: {resp.text}"
-    token = resp.json()["access_token"]
+    # Cookie-based auth: extract token from response cookie, use Bearer fallback
+    token = resp.cookies.get("unihr_access") or resp.json().get("access_token")
+    assert token, f"No access token for {email}"
+    # Clear client cookies so per-request Bearer headers take precedence
+    client.cookies.clear()
     return {"Authorization": f"Bearer {token}"}

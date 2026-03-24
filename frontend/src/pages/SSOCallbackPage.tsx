@@ -20,10 +20,10 @@ export default function SSOCallbackPage() {
     const code = params.get('code')
     const state = params.get('state') || ''
 
-    const tenantId = localStorage.getItem('sso_tenant_id') || ''
-    const provider = localStorage.getItem('sso_provider') || ''
-    const storedState = localStorage.getItem('sso_state') || ''
-    const codeVerifier = localStorage.getItem('sso_code_verifier') || ''
+    const tenantId = sessionStorage.getItem('sso_tenant_id') || ''
+    const provider = sessionStorage.getItem('sso_provider') || ''
+    const storedState = sessionStorage.getItem('sso_state') || ''
+    const codeVerifier = sessionStorage.getItem('sso_code_verifier') || ''
     const redirectUri = `${window.location.origin}/login/callback`
 
     if (!code) {
@@ -50,10 +50,10 @@ export default function SSOCallbackPage() {
     loginWithSSO(code, redirectUri, tenantId, provider, state, codeVerifier)
       .then(() => {
         toast.success('SSO 登入成功')
-        localStorage.removeItem('sso_tenant_id')
-        localStorage.removeItem('sso_provider')
-        localStorage.removeItem('sso_state')
-        localStorage.removeItem('sso_code_verifier')
+        sessionStorage.removeItem('sso_tenant_id')
+        sessionStorage.removeItem('sso_provider')
+        sessionStorage.removeItem('sso_state')
+        sessionStorage.removeItem('sso_code_verifier')
         navigate('/', { replace: true })
       })
       .catch((err: unknown) => {

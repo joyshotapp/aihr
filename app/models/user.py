@@ -20,6 +20,17 @@ class User(Base):
     status = Column(String, default="active")
     role = Column(String, default="employee")
     is_superuser = Column(Boolean, default=False)
+    mfa_enabled = Column(Boolean, default=False, nullable=False)
+    mfa_secret = Column(String(64), nullable=True)
+    mfa_enabled_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Email verification
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # PDPA consent
+    agreed_to_terms = Column(Boolean, default=False, nullable=False)
+    agreed_at = Column(DateTime(timezone=True), nullable=True)
     
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True, index=True)

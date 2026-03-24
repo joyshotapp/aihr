@@ -10,6 +10,8 @@ from app.config import settings
 from app.services.kb_retrieval import KnowledgeBaseRetriever
 from app.services.core_client import CoreAPIClient
 from app.services.structured_answers import try_structured_answer
+from app.services.hr_calculator import try_hr_calculation
+from app.services.circuit_breaker import gemini_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +106,8 @@ class ChatOrchestrator:
         max_tokens: int,
     ) -> str:
         if self._llm_backend == "gemini" and self._openai_async:
-            response = await self._openai_async.chat.completions.create(
+            response = await gemini_breaker.call_async(
+                self._openai_async.chat.completions.create,
                 model=self._model_name(),
                 messages=messages,
                 temperature=temperature,
@@ -507,13 +510,24 @@ class ChatOrchestrator:
 
         try:
             if self._llm_backend == "gemini" and self._openai_async:
-                response = await self._openai_async.chat.completions.create(
-                    model=self._model_name(),
-                    messages=messages,
-                    temperature=getattr(settings, "LLM_TEMPERATURE", 0.3),
-                    max_tokens=getattr(settings, "LLM_MAX_TOKENS", 1500),
-                    stream=True,
-                )
+                # Circuit breaker check (streaming path — record success/failure manually)
+                from app.services.circuit_breaker import CircuitOpenError
+                cb_state = gemini_breaker.state
+                if cb_state.value == "open":
+                    yield "目前 AI 模型暫時無法回應，請稍後再試。"
+                    return
+                try:
+                    response = await self._openai_async.chat.completions.create(
+                        model=self._model_name(),
+                        messages=messages,
+                        temperature=getattr(settings, "LLM_TEMPERATURE", 0.3),
+                        max_tokens=getattr(settings, "LLM_MAX_TOKENS", 1500),
+                        stream=True,
+                    )
+                except Exception:
+                    gemini_breaker._on_failure()
+                    raise
+                gemini_breaker._on_success()
                 async for chunk in response:
                     delta = chunk.choices[0].delta
                     if delta.content:
@@ -898,6 +912,10 @@ class ChatOrchestrator:
         user_suffix += f"\n\n{arbitration_text}\n衝突處理規則：{conflict_rule}"
         if calc_guidance:
             user_suffix += f"\n\n計算與判斷提示：\n{calc_guidance}"
+        # 結構化計算引擎：精確數值結果注入
+        exact_calc = try_hr_calculation(question)
+        if exact_calc:
+            user_suffix += f"\n\n{exact_calc}"
         # 明確列出已找到的法條，要求 LLM 逐一引用
         law_sources = [
             s["title"] for s in context.get("sources", [])

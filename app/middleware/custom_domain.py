@@ -6,14 +6,18 @@ Sets request.state.resolved_tenant_id for downstream handlers.
 """
 
 import logging
+import re
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 logger = logging.getLogger("unihr.domain")
 
-# In-memory cache for domain → tenant_id mapping (TTL handled by periodic refresh)
-_DOMAIN_CACHE: dict[str, str] = {}
+# In-memory cache for domain → tenant_id mapping (None = confirmed not a custom domain)
+_DOMAIN_CACHE: dict[str, str | None] = {}
+
+# Regex to detect bare IP addresses (IPv4 or IPv6)
+_IP_RE = re.compile(r'^[\d.:]+$')
 
 
 class CustomDomainMiddleware(BaseHTTPMiddleware):
@@ -23,16 +27,20 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
         # Skip for well-known / non-custom-domain hosts.
         # - Internal docker hostnames often have no dot (e.g. "web")
         # - sslip.io is our infra/testing domain, not a tenant custom domain
+        # - Plain IP addresses are never custom domains
         if (
             host in ("localhost", "127.0.0.1", "", "app.unihr.com", "admin.unihr.com")
             or "." not in host
             or host.endswith(".sslip.io")
+            or _IP_RE.match(host)
         ):
             return await call_next(request)
 
-        # Check cache first
+        # Check cache first (None = already looked up, not a custom domain)
         if host in _DOMAIN_CACHE:
-            request.state.resolved_tenant_id = _DOMAIN_CACHE[host]
+            tenant_id = _DOMAIN_CACHE[host]
+            if tenant_id:
+                request.state.resolved_tenant_id = tenant_id
             return await call_next(request)
 
         # Lookup in database
@@ -50,6 +58,9 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
                     _DOMAIN_CACHE[host] = str(record.tenant_id)
                     request.state.resolved_tenant_id = str(record.tenant_id)
                     logger.debug("Resolved custom domain %s → tenant %s", host, record.tenant_id)
+                else:
+                    # Cache negative result to avoid repeated DB lookups
+                    _DOMAIN_CACHE[host] = None
             finally:
                 db.close()
         except Exception as e:

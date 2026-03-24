@@ -56,6 +56,8 @@ class PlanInfo(BaseModel):
     display_name: str
     price_monthly_usd: int
     price_yearly_usd: int
+    price_monthly_twd: int
+    price_yearly_twd: int
     max_users: Optional[int] = None
     max_documents: Optional[int] = None
     max_storage_mb: Optional[int] = None
@@ -81,6 +83,7 @@ class UpgradeResult(BaseModel):
     success: bool
     message: str
     new_plan: Optional[str] = None
+    checkout_url: Optional[str] = None
 
 
 # ── Endpoints ──
@@ -95,6 +98,8 @@ def list_plans() -> Any:
             display_name=config["display_name"],
             price_monthly_usd=config["price_monthly_usd"],
             price_yearly_usd=config["price_yearly_usd"],
+            price_monthly_twd=config["price_monthly_twd"],
+            price_yearly_twd=config["price_yearly_twd"],
             max_users=config["max_users"],
             max_documents=config["max_documents"],
             max_storage_mb=config["max_storage_mb"],
@@ -162,7 +167,7 @@ def request_upgrade(
     """
     申請升級方案
 
-    目前階段：直接更新 plan 值（未來整合 Stripe 付款）
+    非 superuser 會導向藍新金流付款，superuser 可直接升級。
     """
     if current_user.role not in ("owner",) and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="只有 Owner 可以變更方案")
@@ -183,6 +188,28 @@ def request_upgrade(
         raise HTTPException(
             status_code=400,
             detail=f"目前方案為 {tenant.plan}，無法降級至 {body.target_plan}（降級請聯繫客服）",
+        )
+
+    if not current_user.is_superuser:
+        # Redirect to NewebPay checkout flow
+        if not settings.NEWEBPAY_MERCHANT_ID:
+            # Enterprise: contact sales
+            if body.target_plan == "enterprise":
+                return UpgradeResult(
+                    success=True,
+                    message="Enterprise 方案請聯繫業務團隊。",
+                    new_plan=tenant.plan,
+                    checkout_url=settings.BILLING_CONTACT_URL,
+                )
+            raise HTTPException(
+                status_code=503,
+                detail="金流尚未設定，請聯繫客服協助升級",
+            )
+        return UpgradeResult(
+            success=True,
+            message="請前往付款頁面完成付款，付款成功後將自動啟用新方案。",
+            new_plan=tenant.plan,
+            checkout_url=f"/subscription/checkout?plan={body.target_plan}",
         )
 
     # Update plan and apply limits

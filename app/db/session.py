@@ -12,7 +12,10 @@
 
 import logging
 import time
-from sqlalchemy import create_engine, event
+from typing import Optional, Union
+from uuid import UUID
+
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
@@ -29,6 +32,17 @@ POOL_RECYCLE = int(getattr(settings, "DB_POOL_RECYCLE", 1800))  # 30 分鐘
 # Slow query 門檻（毫秒）
 SLOW_QUERY_THRESHOLD_MS = int(getattr(settings, "SLOW_QUERY_THRESHOLD_MS", 500))
 
+# ---------------------------------------------------------------------------
+# SSL 設定
+# ---------------------------------------------------------------------------
+_ssl_mode = getattr(settings, "POSTGRES_SSL_MODE", "prefer")
+_connect_args: dict = {}
+if _ssl_mode and _ssl_mode != "disable":
+    _connect_args["sslmode"] = _ssl_mode
+    _ssl_root_cert = getattr(settings, "POSTGRES_SSL_ROOT_CERT", None)
+    if _ssl_root_cert:
+        _connect_args["sslrootcert"] = _ssl_root_cert
+
 engine = create_engine(
     f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"
     f"@{settings.POSTGRES_SERVER}/{settings.POSTGRES_DB}",
@@ -39,6 +53,7 @@ engine = create_engine(
     pool_recycle=POOL_RECYCLE,
     # 開發環境可開啟 echo
     echo=getattr(settings, "DB_ECHO", False),
+    connect_args=_connect_args,
 )
 
 
@@ -88,6 +103,37 @@ def _on_checkout(dbapi_conn, connection_rec, connection_proxy):
 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def apply_rls_context(
+    db,
+    tenant_id: Optional[Union[UUID, str]] = None,
+    bypass: bool = False,
+):
+    """Apply PostgreSQL RLS session variables to an existing DB session."""
+    if not getattr(settings, "RLS_ENFORCEMENT_ENABLED", False):
+        return db
+
+    tenant_id_str = str(tenant_id) if tenant_id is not None else ""
+    bypass_value = "1" if bypass else "0"
+    db.execute(
+        text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+        {"tenant_id": tenant_id_str},
+    )
+    db.execute(
+        text("SELECT set_config('app.bypass_rls', :bypass, true)"),
+        {"bypass": bypass_value},
+    )
+    return db
+
+
+def create_session(
+    tenant_id: Optional[Union[UUID, str]] = None,
+    bypass: bool = False,
+):
+    """Create a DB session with optional RLS context preconfigured."""
+    db = SessionLocal()
+    return apply_rls_context(db, tenant_id=tenant_id, bypass=bypass)
 
 
 # ---------------------------------------------------------------------------

@@ -18,13 +18,14 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.api.deps_permissions import require_admin
 from app.config import settings
 from app.core import security
+from app.core.cookie_auth import set_auth_cookies
 from app.crud import crud_user
 from app.models.sso_config import TenantSSOConfig
 from app.models.user import User
@@ -56,6 +57,24 @@ MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/toke
 MICROSOFT_USERINFO_URL = "https://graph.microsoft.com/v1.0/me"
 
 STATE_TTL_SECONDS = 10 * 60
+
+
+def _allowed_redirect_uris() -> set[str]:
+    allowed = {
+        settings.SSO_DEFAULT_REDIRECT_URI.strip(),
+        f"{settings.FRONTEND_BASE_URL.rstrip('/')}/login/callback",
+    }
+    extra = getattr(settings, "SSO_ALLOWED_REDIRECT_URIS", "")
+    if extra:
+        allowed.update(uri.strip() for uri in extra.split(",") if uri.strip())
+    return allowed
+
+
+def _validate_redirect_uri(redirect_uri: str) -> str:
+    normalized = redirect_uri.strip()
+    if normalized not in _allowed_redirect_uris():
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+    return normalized
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -256,6 +275,7 @@ def create_sso_state(
 @router.post("/sso/callback", response_model=Token)
 async def sso_callback(
     body: OAuthCallbackRequest,
+    response: Response,
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """Exchange OAuth authorization code for a UniHR JWT.
@@ -287,13 +307,15 @@ async def sso_callback(
     if state_payload.get("tenant_id") != str(body.tenant_id) or state_payload.get("provider") != body.provider:
         raise HTTPException(status_code=400, detail="OAuth state does not match request")
 
+    redirect_uri = _validate_redirect_uri(body.redirect_uri)
+
     # 2. Exchange code → userinfo
     if body.provider == "google":
         if not body.code_verifier:
             raise HTTPException(status_code=400, detail="Missing code_verifier")
         user_info = await _exchange_google(
             body.code,
-            body.redirect_uri,
+            redirect_uri,
             sso_cfg.client_id,
             sso_cfg.client_secret,
             body.code_verifier,
@@ -303,7 +325,7 @@ async def sso_callback(
             raise HTTPException(status_code=400, detail="Missing code_verifier")
         user_info = await _exchange_microsoft(
             body.code,
-            body.redirect_uri,
+            redirect_uri,
             sso_cfg.client_id,
             sso_cfg.client_secret,
             body.code_verifier,
@@ -346,8 +368,17 @@ async def sso_callback(
 
     # 5. Issue JWT
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = security.create_access_token(user.email, expires_delta=access_token_expires)
+    refresh_token, jti = security.create_refresh_token(user.email)
+
+    from app.core.redis_client import get_redis_client
+    rc = get_redis_client()
+    if rc:
+        rc.setex(f"refresh:{jti}", settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, user.email)
+
+    set_auth_cookies(response, access_token, refresh_token)
+
     return {
-        "access_token": security.create_access_token(user.email, expires_delta=access_token_expires),
         "token_type": "bearer",
     }
 

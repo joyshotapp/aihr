@@ -78,7 +78,15 @@ def create_message(
 
 
 def get_message_by_id(db: Session, message_id: UUID) -> Optional[Message]:
-    """根據 ID 取得單一訊息。"""
+    """根據 ID 取得單一訊息。
+
+    WARNING: No tenant filter. Use get_message_by_id_for_user() for API endpoints.
+    """
+    warnings.warn(
+        "crud_chat.get_message_by_id() has no tenant_id filter. "
+        "Use get_message_by_id_for_user() instead.",
+        DeprecationWarning, stacklevel=2,
+    )
     return db.query(Message).filter(Message.id == message_id).first()
 
 
@@ -104,12 +112,22 @@ def get_message_by_id_for_user(
 def get_conversation_messages(
     db: Session,
     conversation_id: UUID,
+    *,
+    tenant_id: UUID = None,
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
 ) -> List[Message]:
-    return db.query(Message).filter(
-        Message.conversation_id == conversation_id
-    ).order_by(Message.created_at).offset(skip).limit(limit).all()
+    q = db.query(Message).join(
+        Conversation, Message.conversation_id == Conversation.id
+    ).filter(Message.conversation_id == conversation_id)
+    if tenant_id is not None:
+        q = q.filter(Conversation.tenant_id == tenant_id)
+    else:
+        warnings.warn(
+            "crud_chat.get_conversation_messages() called without tenant_id.",
+            DeprecationWarning, stacklevel=2,
+        )
+    return q.order_by(Message.created_at).offset(skip).limit(limit).all()
 
 
 def delete_conversation(db: Session, conversation_id: UUID, *, tenant_id: UUID = None) -> bool:

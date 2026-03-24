@@ -24,10 +24,13 @@ import csv
 import json
 import time
 import logging
+import socket
+import ipaddress
 from io import StringIO
 from typing import List, Tuple, Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
+from urllib.parse import urlparse
 
 # ── 必要依賴 ──
 import pypdf
@@ -91,9 +94,41 @@ except ImportError:
     _HAS_TRAFILATURA = False
 
 # LlamaParse: 延遲導入（lazy import）避免拖慢啟動
-# llama_parse 依賴 llama_index_core 很重，只在真正需要時才 import
+# 使用新版 llama_cloud_services SDK（llama_parse 已棄用）
 _HAS_LLAMAPARSE = False
 _LlamaParseClient = None
+
+
+def _validate_external_url(url: str) -> str:
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("URL 只允許 http 或 https 協定")
+    if not parsed.hostname:
+        raise ValueError("URL 缺少主機名稱")
+
+    host = parsed.hostname.lower()
+    blocked_hosts = {"localhost", "127.0.0.1", "::1", "0.0.0.0"}
+    if host in blocked_hosts:
+        raise ValueError("禁止存取內部位址")
+
+    try:
+        resolved = {info[4][0] for info in socket.getaddrinfo(host, parsed.port or None, proto=socket.IPPROTO_TCP)}
+    except socket.gaierror as exc:
+        raise ValueError(f"無法解析網址主機: {exc}") from exc
+
+    for address in resolved:
+        ip = ipaddress.ip_address(address)
+        if any([
+            ip.is_private,
+            ip.is_loopback,
+            ip.is_link_local,
+            ip.is_multicast,
+            ip.is_reserved,
+            ip.is_unspecified,
+        ]):
+            raise ValueError("禁止存取內部或保留網段")
+
+    return url.strip()
 
 def _get_available_ocr_langs() -> List[str]:
     if not _HAS_OCR:
@@ -102,6 +137,22 @@ def _get_available_ocr_langs() -> List[str]:
         return pytesseract.get_languages(config="")
     except Exception:
         return []
+
+def _preprocess_for_ocr(img: "Image.Image") -> "Image.Image":
+    """影像前處理：灰階 → 二值化 → 適當放大，提升 Tesseract 中文辨識品質"""
+    from PIL import ImageFilter, ImageOps
+    # 灰階
+    gray = ImageOps.grayscale(img)
+    # 放大小圖（寬 < 1500px 時 2x 上採樣，讓 Tesseract 更容易辨識）
+    w, h = gray.size
+    if w < 1500:
+        scale = max(2, 1500 // w)
+        gray = gray.resize((w * scale, h * scale), Image.LANCZOS)
+    # 輕微銳化 + Otsu 二值化（PIL 沒有 Otsu，用固定 threshold 近似）
+    gray = gray.filter(ImageFilter.SHARPEN)
+    binary = gray.point(lambda px: 255 if px > 180 else 0, "1")
+    return binary.convert("L")  # Tesseract 預期 grayscale
+
 
 def _pick_ocr_langs(preferred: str) -> Tuple[str, Optional[str]]:
     langs = _get_available_ocr_langs()
@@ -151,13 +202,20 @@ def _ensure_llamaparse():
     if _LlamaParseClient is not None:
         return True
     try:
-        from llama_parse import LlamaParse
+        from llama_cloud_services.parse import LlamaParse
         _LlamaParseClient = LlamaParse
         _HAS_LLAMAPARSE = True
         return True
     except ImportError:
-        _HAS_LLAMAPARSE = False
-        return False
+        try:
+            # Fallback: 舊版 llama_parse 套件
+            from llama_parse import LlamaParse
+            _LlamaParseClient = LlamaParse
+            _HAS_LLAMAPARSE = True
+            return True
+        except ImportError:
+            _HAS_LLAMAPARSE = False
+            return False
 
 logger = logging.getLogger(__name__)
 
@@ -304,10 +362,12 @@ class DocumentParser:
         """
         解析文件。
 
-        策略：
-          1. 若 LlamaParse API Key 可用 且 格式在 LLAMAPARSE_FORMATS 中
-             → 優先使用 LlamaParse（品質最高）
-          2. LlamaParse 不可用或失敗 → fallback 到內建解析器
+        策略（Phase 11 — Native-first cost optimization）：
+          1. image 格式 → 仍走 LlamaParse 優先（native OCR 品質落差大）
+          2. 其餘格式 → 先用 native 解析
+             a. native 品質 >= 0.7 → 直接採用，不呼叫 LlamaParse（省 API 費用）
+             b. native 品質 < 0.7 且格式在 LLAMAPARSE_FORMATS → 升級到 LlamaParse
+             c. LlamaParse 不可用或失敗 → 仍回退到 native 結果
 
         Returns:
             (text_content, metadata_dict)
@@ -318,16 +378,19 @@ class DocumentParser:
         start = time.time()
         report = QualityReport(format_detected=file_type)
 
-        # ── LlamaParse 優先路徑 ──
+        # ── 判斷 LlamaParse 是否可用 ──
         from app.config import settings
         llamaparse_key = getattr(settings, "LLAMAPARSE_API_KEY", "")
         llamaparse_enabled = getattr(settings, "LLAMAPARSE_ENABLED", True)
-        if (
+        llamaparse_available = (
             llamaparse_enabled
             and llamaparse_key
             and file_type in LLAMAPARSE_FORMATS
             and _ensure_llamaparse()
-        ):
+        )
+
+        # ── image 格式：仍走 LlamaParse 優先（handwriting OCR 品質差距大）──
+        if llamaparse_available and file_type == "image":
             try:
                 text, report = cls._parse_with_llamaparse(
                     file_path, file_type, report, llamaparse_key
@@ -337,23 +400,18 @@ class DocumentParser:
                     report.total_chars = len(text)
                     metadata = report.to_dict()
                     logger.info(
-                        f"LlamaParse 解析成功: {file_type}, "
+                        f"LlamaParse 解析成功 (image): "
                         f"品質={report.quality_level}, "
                         f"字元={report.total_chars}"
                     )
                     return text.strip(), metadata
                 else:
-                    logger.warning(
-                        f"LlamaParse 解析品質不足 ({report.quality_level})，"
-                        f"降級到內建解析器"
-                    )
-                    # 重置 report 給 fallback 使用
                     report = QualityReport(format_detected=file_type)
             except Exception as e:
-                logger.warning(f"LlamaParse 解析失敗: {e}，降級到內建解析器")
+                logger.warning(f"LlamaParse 解析失敗 (image): {e}，降級到 native OCR")
                 report = QualityReport(format_detected=file_type)
 
-        # ── 內建解析器 ──
+        # ── 其餘格式：Native-first ──
         _PARSERS = {
             "pdf": cls._parse_pdf,
             "docx": cls._parse_docx,
@@ -375,18 +433,58 @@ class DocumentParser:
         if not parser:
             raise ValueError(f"不支援的文件類型: {file_type}")
 
-        text, report = parser(file_path, report)
+        native_text, native_report = parser(file_path, report)
+        native_report.parse_time_ms = int((time.time() - start) * 1000)
+        native_report.total_chars = len(native_text)
+        native_report.compute_quality()
 
-        report.parse_time_ms = int((time.time() - start) * 1000)
-        report.total_chars = len(text)
-        report.compute_quality()
-        metadata = report.to_dict()
+        # ── 判斷是否需要升級到 LlamaParse ──
+        needs_escalation = (
+            llamaparse_available
+            and file_type != "image"  # image 已在上面處理
+            and native_report.quality_score < 0.7
+        )
 
-        if report.quality_level == "failed":
-            detail = "; ".join(report.errors) if report.errors else "品質過低"
+        if needs_escalation:
+            logger.info(
+                f"Native 解析品質不足 ({native_report.quality_score:.2f} / "
+                f"{native_report.quality_level})，升級到 LlamaParse: {file_type}"
+            )
+            escalation_report = QualityReport(format_detected=file_type)
+            try:
+                llama_text, llama_report = cls._parse_with_llamaparse(
+                    file_path, file_type, escalation_report, llamaparse_key
+                )
+                if llama_text.strip() and llama_report.quality_score >= 0.5:
+                    llama_report.parse_time_ms = int((time.time() - start) * 1000)
+                    llama_report.total_chars = len(llama_text)
+                    metadata = llama_report.to_dict()
+                    logger.info(
+                        f"LlamaParse 升級成功: {file_type}, "
+                        f"品質 {native_report.quality_score:.2f} → "
+                        f"{llama_report.quality_score:.2f}"
+                    )
+                    return llama_text.strip(), metadata
+                else:
+                    logger.warning(
+                        "LlamaParse 升級品質仍不足，採用 native 結果"
+                    )
+            except Exception as e:
+                logger.warning(f"LlamaParse 升級失敗: {e}，採用 native 結果")
+        elif not needs_escalation and llamaparse_available and file_type != "image":
+            logger.info(
+                f"Native 解析品質充足 ({native_report.quality_score:.2f} / "
+                f"{native_report.quality_level})，跳過 LlamaParse: {file_type}"
+            )
+
+        # ── 使用 native 結果 ──
+        metadata = native_report.to_dict()
+
+        if native_report.quality_level == "failed":
+            detail = "; ".join(native_report.errors) if native_report.errors else "品質過低"
             raise ValueError(f"文件解析品質不足: {detail}")
 
-        return text.strip(), metadata
+        return native_text.strip(), metadata
 
     # ─────────────────────────────────────────────
     # PDF（三層降級：文字 → 表格 → OCR）
@@ -484,7 +582,7 @@ class DocumentParser:
         lang, _ = _pick_ocr_langs(settings.OCR_LANGS)
         for img in images:
             data = pytesseract.image_to_data(
-                img, lang=lang, output_type=pytesseract.Output.DICT
+                _preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT
             )
             page_words: List[str] = []
             page_confs: List[float] = []
@@ -914,7 +1012,7 @@ class DocumentParser:
                 report.add_warning(note)
 
             data = pytesseract.image_to_data(
-                img, lang=lang, output_type=pytesseract.Output.DICT
+                _preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT
             )
             words: List[str] = []
             confs: List[float] = []
@@ -1053,6 +1151,16 @@ class DocumentParser:
         import nest_asyncio
         nest_asyncio.apply()
 
+        # ── Langfuse span ──
+        from app.services.langfuse_client import get_langfuse
+        lf = get_langfuse()
+        lf_trace = None
+        lf_span = None
+        parse_start = time.time()
+        if lf:
+            lf_trace = lf.trace(name="llamaparse", metadata={"file_type": file_type, "file_path": os.path.basename(file_path)})
+            lf_span = lf_trace.span(name="llamaparse_call", input={"file_type": file_type})
+
         # 根據文件類型調整解析參數
         parsing_instruction = (
             "這是一份人力資源或企業管理相關的文件。"
@@ -1179,10 +1287,24 @@ class DocumentParser:
                 report.handwriting_detected = True
 
             report.compute_quality()
+
+            # ── Langfuse: 記錄 LlamaParse 成本指標 ──
+            if lf_span:
+                lf_span.end(
+                    output={"total_pages": report.total_pages, "total_chars": report.total_chars, "tables_detected": report.tables_detected},
+                    metadata={"quality_score": report.quality_score, "parse_engine": "llamaparse", "duration_s": round(time.time() - parse_start, 2)},
+                )
+            if lf:
+                lf.flush()
+
             return text, report
 
         except Exception as e:
             report.add_warning(f"LlamaParse 錯誤: {e}")
+            if lf_span:
+                lf_span.end(level="ERROR", status_message=str(e))
+            if lf:
+                lf.flush()
             report.compute_quality()
             return "", report
 
@@ -1212,6 +1334,7 @@ class DocumentParser:
             raise ValueError("trafilatura 未安裝，無法擷取網頁")
 
         try:
+            url = _validate_external_url(url)
             # 下載網頁
             downloaded = trafilatura.fetch_url(url)
             if not downloaded:
@@ -1303,23 +1426,32 @@ class TextChunker:
         """
         將文本切片為固定 Token 大小的片段。
 
-        1. 按章節 / 段落邊界切分
-        2. 保護表格不被拆開
-        3. 精確 Token 計算
-        4. 重疊保留上下文
+        1. 偵測 HR 文件模板（員工手冊、請假規定…）並依模板邊界切分
+        2. 無模板時按章節 / 段落邊界切分
+        3. 保護表格不被拆開
+        4. 精確 Token 計算
+        5. 重疊保留上下文
         """
         if not text.strip():
             return []
 
-        sections = cls._split_into_sections(text)
+        # ── 嘗試模板切分 ──
+        from app.services.chunk_templates import detect_template, split_by_template
+        template = detect_template(text)
+        if template:
+            sections = split_by_template(text, template)
+            min_section_tokens = template.min_section_tokens
+        else:
+            sections = cls._split_into_sections(text)
+            from app.config import settings
+            min_section_tokens = (
+                settings.MARKDOWN_MIN_SECTION_TOKENS
+                if cls._is_markdown_like(text)
+                else settings.TEXT_MIN_SECTION_TOKENS
+            )
+
         # 確保空字串 section 不會被累積
         sections = [s for s in sections if s.strip()]
-        from app.config import settings
-        min_section_tokens = (
-            settings.MARKDOWN_MIN_SECTION_TOKENS
-            if cls._is_markdown_like(text)
-            else settings.TEXT_MIN_SECTION_TOKENS
-        )
         sections = cls._merge_small_sections(sections, min_section_tokens)
         chunks: List[str] = []
         current_chunk = ""
@@ -1334,7 +1466,7 @@ class TextChunker:
 
             # 章節標題開頭 → 若當前 chunk 已有足夠內容則強制斷開
             is_heading = section.lstrip().startswith("#")
-            if is_heading and current_chunk.strip() and current_tokens >= 30:
+            if is_heading and current_chunk.strip() and current_tokens >= min_section_tokens:
                 chunks.append(current_chunk.strip())
                 current_chunk = section
                 current_tokens = section_tokens
@@ -1365,7 +1497,7 @@ class TextChunker:
             chunks.append(current_chunk.strip())
 
         # 過濾過小碎片
-        return [c for c in chunks if cls.count_tokens(c) >= settings.TEXT_MIN_SECTION_TOKENS]
+        return [c for c in chunks if cls.count_tokens(c) >= min_section_tokens]
 
     # ─── 輔助 ───
 

@@ -30,8 +30,12 @@ function applyBrandingCSS(branding: Branding) {
   const root = document.documentElement
   if (branding.brand_primary_color) {
     root.style.setProperty('--color-primary', branding.brand_primary_color)
-    // Darken primary for hover (simple approach)
     root.style.setProperty('--color-primary-hover', darkenColor(branding.brand_primary_color, 15))
+    root.style.setProperty('--color-primary-light', branding.brand_primary_color + '1a') // 10% opacity
+  }
+  if (branding.brand_secondary_color) {
+    root.style.setProperty('--color-secondary', branding.brand_secondary_color)
+    root.style.setProperty('--color-secondary-hover', darkenColor(branding.brand_secondary_color, 15))
   }
   if (branding.brand_favicon_url) {
     let link = document.querySelector<HTMLLinkElement>("link[rel*='icon']")
@@ -59,34 +63,22 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding>(defaultBranding)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      // Authenticated: load branding from company API (includes custom colors)
-      companyApi
-        .branding()
-        .then((data: Branding) => {
-          setBranding(data)
-          applyBrandingCSS(data)
-        })
-        .catch(() => {
-          // Fall back to public API on error
-          const domain = window.location.hostname
-          publicApi
-            .branding({ domain: domain !== 'localhost' ? domain : undefined })
-            .then((d: Branding) => { setBranding(d); applyBrandingCSS(d) })
-            .catch(() => {})
-        })
-    } else {
-      // Unauthenticated (login page): resolve from public domain lookup
-      const domain = window.location.hostname
-      publicApi
-        .branding({ domain: domain !== 'localhost' ? domain : undefined })
-        .then((data: Branding) => {
-          setBranding(data)
-          applyBrandingCSS(data)
-        })
-        .catch(() => {})
-    }
+    companyApi
+      .branding()
+      .then((data: Branding) => {
+        setBranding(data)
+        applyBrandingCSS(data)
+      })
+      .catch(() => {
+        const domain = window.location.hostname
+        publicApi
+          .branding({ domain: domain !== 'localhost' ? domain : undefined })
+          .then((data: Branding) => {
+            setBranding(data)
+            applyBrandingCSS(data)
+          })
+          .catch(() => {})
+      })
   }, [])
 
   return (

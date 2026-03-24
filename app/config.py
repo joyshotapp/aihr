@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "change_this"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8  # 8 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     ALGORITHM: str = "HS256"
 
     # ── First superuser (used by scripts/initial_data.py) ──
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "unihr_saas"
+    POSTGRES_SSL_MODE: str = "prefer"  # disable, allow, prefer, require, verify-ca, verify-full
     
     # Redis
     REDIS_HOST: str = "localhost"
@@ -50,9 +52,9 @@ class Settings(BaseSettings):
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
-    CELERY_WORKER_CONCURRENCY: int = 2
+    CELERY_WORKER_CONCURRENCY: int = 8
     CELERY_WORKER_MAX_TASKS_PER_CHILD: int = 100
-    CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB: int = 524288  # 512 MB
+    CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB: int = 1048576  # 1 GB
     CELERY_WORKER_PREFETCH_MULTIPLIER: int = 1
     CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = 300
     CELERY_TASK_TIME_LIMIT_SECONDS: int = 360
@@ -111,6 +113,12 @@ class Settings(BaseSettings):
     # Cloudflare R2（檔案儲存）
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
+    # File malware scanning
+    CLAMAV_ENABLED: bool = False
+    CLAMAV_HOST: str = "clamav"
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: int = 10
+    CLAMAV_FAIL_CLOSED: bool = True
     R2_ENDPOINT: str = ""
     R2_BUCKET: str = "aihr-uploads"
 
@@ -133,7 +141,7 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000  # tokens
     CHUNK_OVERLAP: int = 150  # tokens
     TABLE_FULL_CHUNK_MAX_CHARS: int = 20000  # 結構化表格全文 chunk 上限
-    MARKDOWN_MIN_SECTION_TOKENS: int = 80
+    MARKDOWN_MIN_SECTION_TOKENS: int = 150
     TEXT_MIN_SECTION_TOKENS: int = 30
 
     # OCR
@@ -158,6 +166,7 @@ class Settings(BaseSettings):
     MICROSOFT_CLIENT_ID: str = ""
     MICROSOFT_CLIENT_SECRET: str = ""
     SSO_DEFAULT_REDIRECT_URI: str = "http://localhost:3001/login/callback"
+    SSO_ALLOWED_REDIRECT_URIS: str = ""
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -167,12 +176,65 @@ class Settings(BaseSettings):
     RATE_LIMIT_CHAT_PER_USER: int = 20      # chat requests / minute per user
 
     # PostgreSQL RLS
-    RLS_ENFORCEMENT_ENABLED: bool = False
+    RLS_ENFORCEMENT_ENABLED: bool = True
+
+    # Email Service (transactional email)
+    EMAIL_PROVIDER: str = "resend"  # "resend" | "sendgrid" | "smtp" | "" (disabled)
+    RESEND_API_KEY: str = ""
+    SENDGRID_API_KEY: str = ""
+    EMAIL_FROM_ADDRESS: str = "noreply@unihr.app"
+    EMAIL_FROM_NAME: str = "UniHR"
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    FRONTEND_BASE_URL: str = "http://localhost:3001"  # For email link generation
+
+    # Billing / payment links
+    BILLING_CONTACT_URL: str = "mailto:sales@unihr.app"
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+
+    # NewebPay 藍新金流
+    NEWEBPAY_MERCHANT_ID: str = ""
+    NEWEBPAY_HASH_KEY: str = ""   # AES-256 HashKey (32 chars)
+    NEWEBPAY_HASH_IV: str = ""    # AES-256 HashIV (16 chars)
+    NEWEBPAY_TEST_MODE: bool = True  # True=測試環境, False=正式環境
+
+    # Custom domain SSL automation
+    CUSTOM_DOMAIN_SSL_AUTO_REQUEST: bool = True
+    CUSTOM_DOMAIN_SSL_COMMAND_TEMPLATE: str = ""
+    CUSTOM_DOMAIN_SSL_RELOAD_COMMAND: str = ""
+    CUSTOM_DOMAIN_SSL_TIMEOUT_SECONDS: int = 600
+
+    # Admin TOTP MFA
+    MFA_ISSUER_NAME: str = "UniHR"
+    MFA_TOTP_INTERVAL_SECONDS: int = 30
+    MFA_TOTP_DIGITS: int = 6
+    MFA_SETUP_TOKEN_EXPIRE_MINUTES: int = 10
+    MFA_LOGIN_TOKEN_EXPIRE_MINUTES: int = 5
+
+    # Support widget
+    SUPPORT_WIDGET_ENABLED: bool = True
+    SUPPORT_EMAIL: str = "support@unihr.app"
+    SUPPORT_DOCS_URL: str = "https://unihr.app/docs"
+    SUPPORT_BOOKING_URL: str = "mailto:support@unihr.app?subject=UniHR%20Support"
 
     # Admin API Network Isolation (T4-4)
     ADMIN_IP_WHITELIST_ENABLED: bool = False   # Enable in production
     ADMIN_IP_WHITELIST: str = "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     ADMIN_TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
+
+    # Langfuse LLMOps 可觀測性
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+
+    # MCP Server
+    MCP_ENABLED: bool = False
+    MCP_TRANSPORT: str = "stdio"  # stdio / sse
+    MCP_SSE_PORT: int = 8100
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -236,19 +298,31 @@ class Settings(BaseSettings):
                 )
             # ── Superuser credentials ──
             if self.FIRST_SUPERUSER_EMAIL == "admin@example.com":
-                warnings.warn(
-                    "FIRST_SUPERUSER_EMAIL is still 'admin@example.com'. "
-                    "Consider changing it for production.",
-                    UserWarning,
-                    stacklevel=2,
+                raise ValueError(
+                    "FIRST_SUPERUSER_EMAIL is still the default 'admin@example.com'. "
+                    "Set a production-specific bootstrap admin email."
                 )
             if self.FIRST_SUPERUSER_PASSWORD == "admin123":
-                warnings.warn(
+                raise ValueError(
                     "FIRST_SUPERUSER_PASSWORD is still the default 'admin123'. "
-                    "Set FIRST_SUPERUSER_PASSWORD in .env for production.",
-                    UserWarning,
-                    stacklevel=2,
+                    "Set a strong bootstrap admin password in production."
                 )
+            # ── Email service ──
+            if not self.EMAIL_PROVIDER:
+                raise ValueError(
+                    "EMAIL_PROVIDER is not set. Password reset and invitation emails must be enabled in production."
+                )
+            # ── DB SSL ──
+            if self.POSTGRES_SSL_MODE in ("disable", "prefer"):
+                raise ValueError(
+                    f"POSTGRES_SSL_MODE='{self.POSTGRES_SSL_MODE}' is not allowed in production. Use 'require' or 'verify-full'."
+                )
+            if not self.CLAMAV_ENABLED:
+                raise ValueError("CLAMAV_ENABLED must be true in production/staging")
+            if not self.ADMIN_IP_WHITELIST_ENABLED:
+                raise ValueError("ADMIN_IP_WHITELIST_ENABLED must be true in production/staging")
+            if any(origin.strip() == "*" for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()):
+                raise ValueError("Wildcard CORS origins are not allowed in production/staging")
         return self
 
     @property

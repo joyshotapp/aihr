@@ -17,6 +17,14 @@ import CustomDomainsPage from './pages/CustomDomainsPage'
 import RegionsPage from './pages/RegionsPage'
 import MyUsagePage from './pages/MyUsagePage'
 import RAGDashboardPage from './pages/RAGDashboardPage'
+import QualityDashboardPage from './pages/QualityDashboardPage'
+import PrivacyPage from './pages/PrivacyPage'
+import TermsPage from './pages/TermsPage'
+import AcceptInvitePage from './pages/AcceptInvitePage'
+import LandingPage from './pages/LandingPage'
+import PricingPage from './pages/PricingPage'
+import SignupPage from './pages/SignupPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, loading } = useAuth()
@@ -35,8 +43,15 @@ function AppRoutes() {
   const { token } = useAuth()
   return (
     <Routes>
+      <Route path="/welcome" element={token ? <Navigate to="/" replace /> : <LandingPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/signup" element={token ? <Navigate to="/" replace /> : <SignupPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/login" element={token ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/login/callback" element={<SSOCallbackPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<ChatPage />} />
         <Route path="documents" element={<DocumentsPage />} />
@@ -50,9 +65,10 @@ function AppRoutes() {
         <Route path="subscription" element={<RoleGuard roles={['owner', 'admin']}><SubscriptionPage /></RoleGuard>} />
         <Route path="custom-domains" element={<RoleGuard roles={['owner', 'admin']}><CustomDomainsPage /></RoleGuard>} />
         <Route path="rag-dashboard" element={<RoleGuard roles={['owner', 'admin', 'hr']}><RAGDashboardPage /></RoleGuard>} />
+        <Route path="quality-dashboard" element={<RoleGuard roles={['owner', 'admin']}><QualityDashboardPage /></RoleGuard>} />
         <Route path="regions" element={<RoleGuard roles={['owner', 'admin']}><RegionsPage /></RoleGuard>} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={token ? <Navigate to="/" replace /> : <Navigate to="/welcome" replace />} />
     </Routes>
   )
 }

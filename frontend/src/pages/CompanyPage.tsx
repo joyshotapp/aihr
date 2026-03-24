@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { companyApi } from '../api'
+import { authApi, companyApi } from '../api'
 import {
   Loader2, AlertCircle, Building2, Users, FileText,
   MessageSquare, Gauge, UserPlus, MoreVertical,
   BarChart3, ChevronDown, CheckCircle2, AlertTriangle,
-  Mail, Eye, EyeOff,
+  Mail, Shield,
 } from 'lucide-react'
 
-type Tab = 'dashboard' | 'users' | 'quota' | 'usage'
+type Tab = 'dashboard' | 'users' | 'quota' | 'usage' | 'security'
 
 // ─── Shared ───
 function Loader() {
@@ -109,8 +109,7 @@ function UsersTab() {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee', password: '' })
-  const [showPw, setShowPw] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee' })
   const [submitting, setSubmitting] = useState(false)
   const [msg, setMsg] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -129,9 +128,9 @@ function UsersTab() {
     setMsg('')
     try {
       await companyApi.inviteUser(inviteForm)
-      setInviteForm({ email: '', full_name: '', role: 'employee', password: '' })
+      setInviteForm({ email: '', full_name: '', role: 'employee' })
       setShowInvite(false)
-      setMsg('已邀請使用者')
+      setMsg('邀請信已寄出，對方可透過 Email 完成啟用')
       load()
     } catch (err: any) {
       setMsg(err.response?.data?.detail || '邀請失敗')
@@ -181,6 +180,7 @@ function UsersTab() {
       {showInvite && (
         <form onSubmit={handleInvite} className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
           <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Mail className="h-4 w-4" /> 邀請新成員</h4>
+          <p className="text-xs text-gray-500">系統會寄送邀請信給新成員，由對方自行設定密碼並完成註冊。</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
               type="email" required placeholder="Email *"
@@ -201,17 +201,6 @@ function UsersTab() {
             >
               {roles.filter(r => r !== 'owner').map(r => <option key={r} value={r}>{r}</option>)}
             </select>
-            <div className="relative">
-              <input
-                type={showPw ? 'text' : 'password'} required placeholder="初始密碼 *"
-                value={inviteForm.password}
-                onChange={e => setInviteForm(p => ({ ...p, password: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-9 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={submitting} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
@@ -424,6 +413,170 @@ function UsageTab() {
   )
 }
 
+function SecurityTab() {
+  const [status, setStatus] = useState<{ enabled: boolean; eligible: boolean; enabled_at?: string | null } | null>(null)
+  const [setup, setSetup] = useState<{ secret: string; otpauth_uri: string; setup_token: string } | null>(null)
+  const [code, setCode] = useState('')
+  const [disableCode, setDisableCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true)
+    authApi.mfaStatus().then(setStatus).catch(() => setStatus(null)).finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const startSetup = async () => {
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const result = await authApi.mfaSetup()
+      setSetup(result)
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || '無法產生 2FA 設定')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const enableMfa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!setup) return
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const result = await authApi.mfaEnable(setup.setup_token, code)
+      setStatus(result)
+      setSetup(null)
+      setCode('')
+      setMessage('2FA 已啟用，之後登入將需要驗證碼')
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || '啟用 2FA 失敗')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const disableMfa = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setMessage('')
+    try {
+      const result = await authApi.mfaDisable(password, disableCode)
+      setStatus(result)
+      setPassword('')
+      setDisableCode('')
+      setMessage('2FA 已停用')
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || '停用 2FA 失敗')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) return <Loader />
+  if (!status) return <Empty text="無法載入安全設定" />
+  if (!status.eligible) return <Empty text="目前只有 owner、admin 與平台管理員可啟用 2FA" />
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2"><Shield className="h-4 w-4" /> 管理員 2FA</h3>
+            <p className="mt-1 text-sm text-gray-500">使用 TOTP 驗證器 App 保護 owner/admin 帳號登入。</p>
+          </div>
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.enabled ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+            {status.enabled ? '已啟用' : '未啟用'}
+          </span>
+        </div>
+        {status.enabled_at && <p className="text-xs text-gray-400">啟用時間：{new Date(status.enabled_at).toLocaleString('zh-TW')}</p>}
+        {message && <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-700">{message}</div>}
+      </div>
+
+      {!status.enabled && !setup && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-5 space-y-3">
+          <p className="text-sm text-gray-700">啟用後，登入時除了密碼之外，還必須輸入驗證器 App 中的 6 位數驗證碼。</p>
+          <button onClick={startSetup} disabled={submitting} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            {submitting ? '產生中...' : '開始設定 2FA'}
+          </button>
+        </div>
+      )}
+
+      {!status.enabled && setup && (
+        <form onSubmit={enableMfa} className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-800">設定驗證器 App</h4>
+            <p className="mt-1 text-xs text-gray-600">請將下列 secret 加入 Google Authenticator、1Password 或 Microsoft Authenticator，然後輸入當前驗證碼。</p>
+          </div>
+          <div className="rounded-lg bg-white border border-emerald-200 p-4 space-y-2">
+            <p className="text-xs font-medium text-gray-500">Secret</p>
+            <p className="font-mono text-sm text-gray-900 break-all">{setup.secret}</p>
+            <p className="text-xs font-medium text-gray-500 pt-2">OTPAuth URI</p>
+            <p className="font-mono text-xs text-gray-700 break-all">{setup.otpauth_uri}</p>
+          </div>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            placeholder="輸入 6 位數驗證碼"
+            value={code}
+            onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tracking-[0.3em] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <div className="flex gap-2">
+            <button type="submit" disabled={submitting} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+              {submitting ? '驗證中...' : '啟用 2FA'}
+            </button>
+            <button type="button" onClick={() => { setSetup(null); setCode(''); setMessage('') }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              取消
+            </button>
+          </div>
+        </form>
+      )}
+
+      {status.enabled && (
+        <form onSubmit={disableMfa} className="rounded-xl border border-red-200 bg-red-50/60 p-5 space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-800">停用 2FA</h4>
+            <p className="mt-1 text-xs text-gray-600">請輸入目前密碼與驗證器 App 中的驗證碼。</p>
+          </div>
+          <input
+            type="password"
+            required
+            placeholder="目前密碼"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            placeholder="6 位數驗證碼"
+            value={disableCode}
+            onChange={e => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm tracking-[0.3em] focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <button type="submit" disabled={submitting} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+            {submitting ? '停用中...' : '停用 2FA'}
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
 // ═══ Main Page ═══
 export default function CompanyPage() {
   const [tab, setTab] = useState<Tab>('dashboard')
@@ -433,6 +586,7 @@ export default function CompanyPage() {
     { key: 'users', label: '成員管理', icon: Users },
     { key: 'quota', label: '配額', icon: Gauge },
     { key: 'usage', label: '用量', icon: BarChart3 },
+    { key: 'security', label: '安全', icon: Shield },
   ]
 
   return (
@@ -464,6 +618,7 @@ export default function CompanyPage() {
         {tab === 'users' && <UsersTab />}
         {tab === 'quota' && <QuotaTab />}
         {tab === 'usage' && <UsageTab />}
+        {tab === 'security' && <SecurityTab />}
       </div>
     </div>
   )

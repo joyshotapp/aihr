@@ -82,7 +82,7 @@ function login(email, password) {
     tags: { name: "auth_login" },
   };
 
-  const res = http.post(`${BASE_URL}/api/v1/auth/login`, payload, params);
+  const res = http.post(`${BASE_URL}/api/v1/auth/login/access-token`, payload, params);
   loginDuration.add(res.timings.duration);
 
   const success = check(res, {
@@ -136,8 +136,8 @@ export default function () {
     const question = questions[Math.floor(Math.random() * questions.length)];
 
     const chatRes = http.post(
-      `${BASE_URL}/api/v1/chat/`,
-      JSON.stringify({ question }),
+      `${BASE_URL}/api/v1/chat/chat`,
+      JSON.stringify({ question, top_k: 5 }),
       {
         ...headers,
         headers: { ...headers.headers, "Content-Type": "application/json" },
@@ -160,9 +160,14 @@ export default function () {
     const queries = ["特休假", "加班", "離職", "請假", "勞保"];
     const q = queries[Math.floor(Math.random() * queries.length)];
 
-    const searchRes = http.get(
-      `${BASE_URL}/api/v1/kb/search?q=${encodeURIComponent(q)}&top_k=5`,
-      { ...headers, tags: { name: "kb_search" } }
+    const searchRes = http.post(
+      `${BASE_URL}/api/v1/kb/search`,
+      JSON.stringify({ query: q, top_k: 5 }),
+      {
+        ...headers,
+        headers: { ...headers.headers, "Content-Type": "application/json" },
+        tags: { name: "kb_search" },
+      }
     );
 
     searchDuration.add(searchRes.timings.duration);
@@ -232,7 +237,7 @@ export function handleSummary(data) {
     timestamp: new Date().toISOString(),
     totalRequests: data.metrics.http_reqs ? data.metrics.http_reqs.values.count : 0,
     failedRequests: data.metrics.http_req_failed
-      ? data.metrics.http_req_failed.values.passes
+      ? data.metrics.http_req_failed.values.fails
       : 0,
     avgDuration: data.metrics.http_req_duration
       ? data.metrics.http_req_duration.values.avg.toFixed(2)

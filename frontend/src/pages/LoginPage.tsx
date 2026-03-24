@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { ssoApi } from '../api'
 import { Loader2, Mail, Building2, ArrowLeft } from 'lucide-react'
@@ -48,9 +49,11 @@ function MicrosoftIcon() {
 }
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, completeMfaLogin } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showSSO, setShowSSO] = useState(false)
 
@@ -91,10 +94,10 @@ export default function LoginPage() {
       const codeVerifier = randomString(64)
       const codeChallenge = await sha256Base64Url(codeVerifier)
 
-      localStorage.setItem('sso_tenant_id', ssoDiscovered.tenant_id)
-      localStorage.setItem('sso_provider', provider)
-      localStorage.setItem('sso_state', state)
-      localStorage.setItem('sso_code_verifier', codeVerifier)
+      sessionStorage.setItem('sso_tenant_id', ssoDiscovered.tenant_id)
+      sessionStorage.setItem('sso_provider', provider)
+      sessionStorage.setItem('sso_state', state)
+      sessionStorage.setItem('sso_code_verifier', codeVerifier)
 
       const redirectUri = `${window.location.origin}/login/callback`
 
@@ -132,10 +135,31 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      await login(email, password)
-      toast.success('登入成功')
+      const result = await login(email, password)
+      if (result.mfa_required && result.mfa_token) {
+        setMfaToken(result.mfa_token)
+        setOtpCode('')
+        toast.success('請輸入驗證器中的 2FA 驗證碼')
+      } else {
+        toast.success('登入成功')
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '登入失敗'
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mfaToken) return
+    setLoading(true)
+    try {
+      await completeMfaLogin(mfaToken, otpCode)
+      toast.success('登入成功')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '2FA 驗證失敗'
       toast.error(msg)
     } finally {
       setLoading(false)
@@ -159,34 +183,63 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="rounded-2xl bg-white p-8 shadow-xl">
+        <form onSubmit={mfaToken ? handleMfaSubmit : handleSubmit} className="rounded-2xl bg-white p-8 shadow-xl">
           <h2 className="mb-6 text-lg font-semibold text-gray-900">歡迎登入</h2>
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">電子郵件</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none transition-shadow"
-              />
-            </div>
+          {!mfaToken ? (
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">電子郵件</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none transition-shadow"
+                />
+              </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">密碼</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none transition-shadow"
-              />
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">密碼</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none transition-shadow"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                此帳號已啟用 2FA，請輸入驗證器 App 內的 6 位數驗證碼。
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">驗證碼</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="123456"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm tracking-[0.3em] focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none transition-shadow"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setMfaToken(null); setOtpCode('') }}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                返回帳號密碼登入
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -197,21 +250,21 @@ export default function LoginPage() {
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d15454')}
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {loading ? '登入中...' : '登入'}
+            {loading ? '登入中...' : mfaToken ? '驗證 2FA' : '登入'}
           </button>
 
           {/* Divider */}
-          <div className="relative my-6">
+          {!mfaToken && <div className="relative my-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
             <div className="relative flex justify-center">
               <button type="button" onClick={() => { setShowSSO(!showSSO); setSsoDiscovered(null); setSsoEmail('') }} className="bg-white px-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
                 {showSSO ? '隱藏 SSO 登入' : '使用 SSO 登入'}
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* SSO Section — Email-based auto-discovery */}
-          {showSSO && !ssoDiscovered && (
+          {!mfaToken && showSSO && !ssoDiscovered && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Mail className="h-4 w-4" style={{ color: '#d15454' }} />
@@ -241,7 +294,7 @@ export default function LoginPage() {
           )}
 
           {/* SSO Discovered — show tenant info + provider buttons */}
-          {showSSO && ssoDiscovered && (
+          {!mfaToken && showSSO && ssoDiscovered && (
             <div className="space-y-3">
               <div className="flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
                 <div className="flex items-center gap-2">
@@ -279,6 +332,17 @@ export default function LoginPage() {
             </div>
           )}
         </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          還沒有帳號？
+          <Link to="/signup" className="ml-1 font-medium text-[#d15454] hover:underline">免費註冊</Link>
+        </p>
+
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-500">
+          <Link to="/privacy" className="transition-colors hover:text-gray-800">隱私權政策</Link>
+          <span className="text-gray-300">|</span>
+          <Link to="/terms" className="transition-colors hover:text-gray-800">服務條款</Link>
+        </div>
 
         <p className="mt-4 text-center text-xs text-gray-400">
           © 2026 Upower UniHR. All rights reserved.

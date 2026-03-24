@@ -11,7 +11,13 @@ celery_app = Celery(
 celery_app.conf.broker_connection_retry_on_startup = True
 
 celery_app.conf.task_routes = {
-    "app.tasks.*": {"queue": "celery"}
+    "app.tasks.*": {"queue": "celery"},
+}
+
+# Priority queue: 'bulk' queue for large files dispatched by batch-upload
+celery_app.conf.task_queues = {
+    "celery": {"exchange": "celery", "routing_key": "celery"},
+    "bulk": {"exchange": "celery", "routing_key": "bulk"},
 }
 
 celery_app.conf.update(

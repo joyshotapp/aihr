@@ -89,8 +89,8 @@ def get_department(
 ) -> Any:
     """取得單一部門"""
     check_department_permission(current_user)
-    dept = crud_permission.get_department(db, department_id=department_id)
-    if not dept or dept.tenant_id != current_user.tenant_id:
+    dept = crud_permission.get_department(db, department_id=department_id, tenant_id=current_user.tenant_id)
+    if not dept:
         raise HTTPException(status_code=404, detail="部門不存在")
     return dept
 
@@ -106,10 +106,10 @@ def update_department(
     check_department_permission(current_user)
     if current_user.role not in ["owner", "admin"] and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="只有 owner/admin 可修改部門")
-    dept = crud_permission.get_department(db, department_id=department_id)
-    if not dept or dept.tenant_id != current_user.tenant_id:
+    dept = crud_permission.get_department(db, department_id=department_id, tenant_id=current_user.tenant_id)
+    if not dept:
         raise HTTPException(status_code=404, detail="部門不存在")
-    updated = crud_permission.update_department(db, department_id=department_id, obj_in=dept_in)
+    updated = crud_permission.update_department(db, department_id=department_id, tenant_id=current_user.tenant_id, obj_in=dept_in)
     return updated
 
 
@@ -123,10 +123,10 @@ def delete_department(
     check_department_permission(current_user)
     if current_user.role not in ["owner", "admin"] and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="只有 owner/admin 可停用部門")
-    dept = crud_permission.get_department(db, department_id=department_id)
-    if not dept or dept.tenant_id != current_user.tenant_id:
+    dept = crud_permission.get_department(db, department_id=department_id, tenant_id=current_user.tenant_id)
+    if not dept:
         raise HTTPException(status_code=404, detail="部門不存在")
-    crud_permission.delete_department(db, department_id=department_id)
+    crud_permission.delete_department(db, department_id=department_id, tenant_id=current_user.tenant_id)
 
 
 # ═══════════════════════════════════════════

@@ -9,12 +9,22 @@ interface CustomDomain {
   verified: boolean
   verification_token: string
   ssl_provisioned: boolean
+  ssl_status: string
+  ssl_last_error: string | null
+  ssl_requested_at: string | null
+  ssl_provisioned_at: string | null
   created_at: string | null
 }
 
 interface VerifyResult {
   domain: string
   verified: boolean
+  message: string
+}
+
+interface ProvisionResult {
+  domain: string
+  ssl_status: string
   message: string
 }
 
@@ -25,10 +35,11 @@ export default function CustomDomainsPage() {
   const [newDomain, setNewDomain] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [verifying, setVerifying] = useState<string | null>(null)
+  const [provisioning, setProvisioning] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get<CustomDomain[]>('/custom-domains/')
+      const { data } = await api.get<CustomDomain[]>('/domains/')
       setDomains(data)
     } catch {
       // ignore
@@ -45,7 +56,7 @@ export default function CustomDomainsPage() {
     if (!domain) return
     setAdding(true)
     try {
-      await api.post('/custom-domains/', { domain })
+      await api.post('/domains/', { domain })
       toast.success('域名已新增，請依指示設定 DNS')
       setNewDomain('')
       setShowForm(false)
@@ -61,7 +72,7 @@ export default function CustomDomainsPage() {
   const handleVerify = async (id: string) => {
     setVerifying(id)
     try {
-      const { data } = await api.post<VerifyResult>(`/custom-domains/${id}/verify`)
+      const { data } = await api.post<VerifyResult>(`/domains/${id}/verify`)
       if (data.verified) {
         toast.success(data.message)
       } else {
@@ -76,10 +87,24 @@ export default function CustomDomainsPage() {
     }
   }
 
+  const handleProvision = async (id: string) => {
+    setProvisioning(id)
+    try {
+      const { data } = await api.post<ProvisionResult>(`/domains/${id}/ssl/provision`)
+      toast.success(data.message)
+      load()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'SSL 申請失敗'
+      toast.error(msg)
+    } finally {
+      setProvisioning(null)
+    }
+  }
+
   const handleDelete = async (id: string, domain: string) => {
     if (!confirm(`確定要刪除域名 ${domain}？此操作無法復原。`)) return
     try {
-      await api.delete(`/custom-domains/${id}`)
+      await api.delete(`/domains/${id}`)
       toast.success('域名已刪除')
       load()
     } catch {
@@ -90,6 +115,33 @@ export default function CustomDomainsPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.success('已複製到剪貼簿')
+  }
+
+  const renderSslStatus = (domain: CustomDomain) => {
+    if (!domain.verified) return '待 DNS 驗證'
+    switch (domain.ssl_status) {
+      case 'provisioned':
+        return 'SSL 已啟用'
+      case 'provisioning':
+        return 'SSL 申請中'
+      case 'failed':
+        return 'SSL 申請失敗'
+      default:
+        return '等待 SSL 申請'
+    }
+  }
+
+  const sslStatusClass = (domain: CustomDomain) => {
+    switch (domain.ssl_status) {
+      case 'provisioned':
+        return 'text-green-600'
+      case 'provisioning':
+        return 'text-blue-600'
+      case 'failed':
+        return 'text-red-600'
+      default:
+        return 'text-gray-500'
+    }
   }
 
   if (loading) {
@@ -196,8 +248,8 @@ export default function CustomDomainsPage() {
                             {d.verified ? '已驗證' : '待驗證'}
                           </span>
                           {d.verified && (
-                            <span className={`text-xs font-medium ${d.ssl_provisioned ? 'text-green-600' : 'text-gray-400'}`}>
-                              {d.ssl_provisioned ? 'SSL 已啟用' : 'SSL 配置中'}
+                            <span className={`text-xs font-medium ${sslStatusClass(d)}`}>
+                              {renderSslStatus(d)}
                             </span>
                           )}
                           {d.created_at && (
@@ -221,6 +273,20 @@ export default function CustomDomainsPage() {
                             <RefreshCw className="h-3.5 w-3.5" />
                           )}
                           驗證
+                        </button>
+                      )}
+                      {d.verified && !d.ssl_provisioned && (
+                        <button
+                          onClick={() => handleProvision(d.id)}
+                          disabled={provisioning === d.id || d.ssl_status === 'provisioning'}
+                          className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                        >
+                          {provisioning === d.id || d.ssl_status === 'provisioning' ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          {d.ssl_status === 'failed' ? '重試 SSL' : '申請 SSL'}
                         </button>
                       )}
                       <button
@@ -279,6 +345,24 @@ export default function CustomDomainsPage() {
                       <p className="mt-3 text-xs text-amber-600">
                         此外，請新增 <strong>CNAME</strong> 記錄將 <code>{d.domain}</code> 指向 <code>app.unihr.com</code>
                       </p>
+                    </div>
+                  )}
+
+                  {d.verified && (
+                    <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-4 text-xs text-gray-600 space-y-2">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="font-medium text-gray-700">SSL 狀態</span>
+                        <span className={sslStatusClass(d)}>{renderSslStatus(d)}</span>
+                      </div>
+                      {d.ssl_requested_at && (
+                        <p>最近申請時間：{new Date(d.ssl_requested_at).toLocaleString('zh-TW')}</p>
+                      )}
+                      {d.ssl_provisioned_at && (
+                        <p>憑證就緒時間：{new Date(d.ssl_provisioned_at).toLocaleString('zh-TW')}</p>
+                      )}
+                      {d.ssl_last_error && (
+                        <p className="text-red-600">錯誤訊息：{d.ssl_last_error}</p>
+                      )}
                     </div>
                   )}
                 </div>

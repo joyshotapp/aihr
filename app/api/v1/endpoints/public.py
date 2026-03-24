@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.api import deps
+from app.config import settings
 from app.models.tenant import Tenant
 
 router = APIRouter()
@@ -23,6 +24,13 @@ class BrandingPublic(BaseModel):
     brand_primary_color: Optional[str] = None
     brand_secondary_color: Optional[str] = None
     brand_favicon_url: Optional[str] = None
+
+
+class SupportWidgetConfig(BaseModel):
+    enabled: bool = True
+    email: str
+    docs_url: str
+    booking_url: str
 
 
 @router.get("/branding", response_model=BrandingPublic)
@@ -62,4 +70,14 @@ def get_public_branding(
         brand_primary_color=tenant.brand_primary_color,
         brand_secondary_color=tenant.brand_secondary_color,
         brand_favicon_url=tenant.brand_favicon_url,
+    )
+
+
+@router.get("/support", response_model=SupportWidgetConfig)
+def get_support_widget_config() -> Any:
+    return SupportWidgetConfig(
+        enabled=settings.SUPPORT_WIDGET_ENABLED,
+        email=settings.SUPPORT_EMAIL,
+        docs_url=settings.SUPPORT_DOCS_URL,
+        booking_url=settings.SUPPORT_BOOKING_URL,
     )

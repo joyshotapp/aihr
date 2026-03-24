@@ -9,7 +9,9 @@ Allows tenant Owner/Admin to:
 """
 import hashlib
 import logging
+import re
 import uuid
+from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,6 +27,9 @@ from app.middleware.custom_domain import invalidate_domain_cache
 
 router = APIRouter()
 logger = logging.getLogger("unihr.custom_domain")
+DOMAIN_RE = re.compile(
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+)
 
 
 # ── Schemas ──
@@ -39,6 +44,10 @@ class DomainInfo(BaseModel):
     verified: bool
     verification_token: str
     ssl_provisioned: bool
+    ssl_status: str
+    ssl_last_error: Optional[str] = None
+    ssl_requested_at: Optional[str] = None
+    ssl_provisioned_at: Optional[str] = None
     created_at: Optional[str] = None
 
 
@@ -48,12 +57,54 @@ class DomainVerifyResult(BaseModel):
     message: str
 
 
+class DomainSSLProvisionResult(BaseModel):
+    domain: str
+    ssl_status: str
+    message: str
+
+
 # ── Helpers ──
 
 def _generate_verification_token(tenant_id: str, domain: str) -> str:
     """Generate a deterministic verification token."""
     raw = f"unihr-verify-{tenant_id}-{domain}-{uuid.uuid4().hex[:8]}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def _serialize_dt(value: Optional[datetime]) -> Optional[str]:
+    return value.isoformat() if value else None
+
+
+def _to_domain_info(record: CustomDomain) -> DomainInfo:
+    return DomainInfo(
+        id=str(record.id),
+        domain=record.domain,
+        verified=record.verified,
+        verification_token=record.verification_token,
+        ssl_provisioned=record.ssl_provisioned,
+        ssl_status=record.ssl_status,
+        ssl_last_error=record.ssl_last_error,
+        ssl_requested_at=_serialize_dt(record.ssl_requested_at),
+        ssl_provisioned_at=_serialize_dt(record.ssl_provisioned_at),
+        created_at=_serialize_dt(record.created_at),
+    )
+
+
+def _queue_ssl_provisioning(db: Session, record: CustomDomain, tenant_id: str) -> bool:
+    from app.services.custom_domain_ssl import ssl_automation_enabled
+
+    if not ssl_automation_enabled():
+        return False
+
+    from app.tasks.custom_domain_tasks import provision_custom_domain_ssl_task
+
+    record.ssl_status = "provisioning"
+    record.ssl_last_error = None
+    record.ssl_requested_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(record)
+    provision_custom_domain_ssl_task.delay(str(record.id), tenant_id)
+    return True
 
 
 # ── Endpoints ──
@@ -68,17 +119,7 @@ def list_domains(
         CustomDomain.tenant_id == current_user.tenant_id
     ).order_by(CustomDomain.created_at.desc()).all()
 
-    return [
-        DomainInfo(
-            id=str(d.id),
-            domain=d.domain,
-            verified=d.verified,
-            verification_token=d.verification_token,
-            ssl_provisioned=d.ssl_provisioned,
-            created_at=str(d.created_at) if d.created_at else None,
-        )
-        for d in domains
-    ]
+    return [_to_domain_info(d) for d in domains]
 
 
 @router.post("/", response_model=DomainInfo, status_code=201)
@@ -98,7 +139,7 @@ def add_domain(
         )
 
     domain = body.domain.lower().strip()
-    if not domain or "." not in domain:
+    if not domain or not DOMAIN_RE.match(domain):
         raise HTTPException(status_code=400, detail="無效的域名格式")
 
     # Check uniqueness
@@ -111,6 +152,7 @@ def add_domain(
         tenant_id=current_user.tenant_id,
         domain=domain,
         verification_token=token,
+        ssl_status="pending_dns",
     )
     db.add(record)
     db.commit()
@@ -119,14 +161,7 @@ def add_domain(
 
     logger.info("Custom domain added: %s for tenant %s", domain, current_user.tenant_id)
 
-    return DomainInfo(
-        id=str(record.id),
-        domain=record.domain,
-        verified=record.verified,
-        verification_token=record.verification_token,
-        ssl_provisioned=record.ssl_provisioned,
-        created_at=str(record.created_at) if record.created_at else None,
-    )
+    return _to_domain_info(record)
 
 
 @router.post("/{domain_id}/verify", response_model=DomainVerifyResult)
@@ -174,19 +209,40 @@ def verify_domain(
         logger.info("DNS verification failed for %s: %s", record.domain, e)
 
     if verified:
-        from datetime import datetime, timezone
         record.verified = True
         record.verified_at = datetime.now(timezone.utc)
+        record.ssl_status = "ready"
+        record.ssl_last_error = None
         if record.ssl_provisioned:
             # Only activate custom domain after SSL is ready
             tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
             if tenant:
                 tenant.custom_domain = record.domain
         db.commit()
+        db.refresh(record)
         invalidate_domain_cache(record.domain)
         logger.info("Domain verified: %s", record.domain)
         if record.ssl_provisioned:
             return DomainVerifyResult(domain=record.domain, verified=True, message="域名驗證成功！")
+
+        try:
+            queued = False
+            from app.config import settings
+
+            if settings.CUSTOM_DOMAIN_SSL_AUTO_REQUEST:
+                queued = _queue_ssl_provisioning(db, record, str(current_user.tenant_id))
+                if queued:
+                    return DomainVerifyResult(
+                        domain=record.domain,
+                        verified=True,
+                        message="域名驗證成功，已開始申請 SSL 憑證",
+                    )
+        except Exception as exc:
+            logger.exception("Failed to queue SSL provisioning for %s", record.domain)
+            record.ssl_status = "failed"
+            record.ssl_last_error = str(exc)[:500]
+            db.commit()
+
         return DomainVerifyResult(
             domain=record.domain,
             verified=True,
@@ -198,6 +254,61 @@ def verify_domain(
             verified=False,
             message=f"驗證失敗。請在 DNS 新增 TXT 記錄：_unihr-verify.{record.domain} → {record.verification_token}",
         )
+
+
+@router.post("/{domain_id}/ssl/provision", response_model=DomainSSLProvisionResult)
+def provision_domain_ssl(
+    domain_id: str,
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_admin),
+) -> Any:
+    """手動重新觸發 SSL 憑證申請。"""
+    record = db.query(CustomDomain).filter(
+        CustomDomain.id == domain_id,
+        CustomDomain.tenant_id == current_user.tenant_id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="域名不存在")
+
+    if not record.verified:
+        raise HTTPException(status_code=400, detail="請先完成 DNS 驗證")
+
+    if record.ssl_provisioned:
+        return DomainSSLProvisionResult(
+            domain=record.domain,
+            ssl_status="provisioned",
+            message="SSL 憑證已就緒",
+        )
+
+    if record.ssl_status == "provisioning":
+        return DomainSSLProvisionResult(
+            domain=record.domain,
+            ssl_status=record.ssl_status,
+            message="SSL 憑證申請進行中",
+        )
+
+    from app.services.custom_domain_ssl import ssl_automation_enabled
+
+    if not ssl_automation_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="尚未設定 SSL 自動化命令，請聯繫系統管理員",
+        )
+
+    try:
+        _queue_ssl_provisioning(db, record, str(current_user.tenant_id))
+    except Exception as exc:
+        logger.exception("Failed to queue SSL provisioning for %s", record.domain)
+        record.ssl_status = "failed"
+        record.ssl_last_error = str(exc)[:500]
+        db.commit()
+        raise HTTPException(status_code=500, detail="無法啟動 SSL 申請工作") from exc
+
+    return DomainSSLProvisionResult(
+        domain=record.domain,
+        ssl_status="provisioning",
+        message="已重新啟動 SSL 憑證申請",
+    )
 
 
 @router.delete("/{domain_id}")

@@ -8,11 +8,21 @@ from app.models.document import Document, DocumentChunk
 from app.schemas.document import DocumentCreate, DocumentUpdate
 
 
-def get(db: Session, document_id: UUID) -> Document:
-    warnings.warn(
-        "crud_document.get() has no tenant_id filter. Use get_for_tenant() instead.",
-        DeprecationWarning, stacklevel=2,
-    )
+def get(db: Session, document_id: UUID, *, _internal: bool = False) -> Document:
+    """Get document by ID without tenant filter.
+    
+    WARNING: This bypasses tenant isolation. Only use for:
+    - Background tasks that already validate tenant_id separately
+    - Superuser admin operations with explicit is_superuser check
+    
+    For all other cases, use get_for_tenant().
+    """
+    if not _internal:
+        warnings.warn(
+            "crud_document.get() has no tenant_id filter. "
+            "Use get_for_tenant() or pass _internal=True for background tasks.",
+            DeprecationWarning, stacklevel=2,
+        )
     return db.query(Document).filter(Document.id == document_id).first()
 
 

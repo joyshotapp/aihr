@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { docApi } from '../api'
 import api from '../api'
 import { useAuth } from '../auth'
@@ -34,6 +34,8 @@ export default function DocumentsPage() {
   const [uploadTotal, setUploadTotal] = useState(0)
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
   const [selectedDept, setSelectedDept] = useState<string>('')
+  const [progressMap, setProgressMap] = useState<Record<string, { pct: number; detail: string }>>({})
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const canManage = ['owner', 'admin', 'hr'].includes(user?.role ?? '')
 
@@ -60,10 +62,24 @@ export default function DocumentsPage() {
 
   // Poll for processing status
   useEffect(() => {
-    const processing = docs.some(d => ['uploading', 'parsing', 'embedding'].includes(d.status))
-    if (!processing) return
-    const timer = setInterval(loadDocs, 3000)
-    return () => clearInterval(timer)
+    const processingDocs = docs.filter(d => ['uploading', 'parsing', 'embedding'].includes(d.status))
+    if (!processingDocs.length) {
+      setProgressMap({})
+      if (progressTimerRef.current) { clearInterval(progressTimerRef.current); progressTimerRef.current = null }
+      return
+    }
+    // Poll progress for each processing doc
+    const fetchProgress = () => {
+      processingDocs.forEach(d => {
+        docApi.progress(d.id).then(p => {
+          setProgressMap(prev => ({ ...prev, [d.id]: { pct: p.pct, detail: p.detail } }))
+        }).catch(() => {})
+      })
+    }
+    fetchProgress()
+    const timer = setInterval(() => { fetchProgress(); loadDocs() }, 3000)
+    progressTimerRef.current = timer
+    return () => { clearInterval(timer); progressTimerRef.current = null }
   }, [docs, loadDocs])
 
   const onDrop = useCallback(async (files: File[]) => {
@@ -248,6 +264,22 @@ export default function DocumentsPage() {
                           <StatusIcon className={clsx('h-3 w-3', ['uploading','parsing','embedding'].includes(doc.status) && 'animate-spin')} />
                           {st.label}
                         </span>
+                        {['parsing', 'embedding'].includes(doc.status) && (
+                          <div className="mt-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200">
+                                <div
+                                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                                  style={{ width: `${progressMap[doc.id]?.pct ?? 0}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-gray-400 whitespace-nowrap">{progressMap[doc.id]?.pct ?? 0}%</span>
+                            </div>
+                            {progressMap[doc.id]?.detail && (
+                              <p className="text-[10px] text-gray-400 mt-0.5 truncate">{progressMap[doc.id].detail}</p>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">{doc.chunk_count ?? '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-500">

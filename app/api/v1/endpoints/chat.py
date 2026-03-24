@@ -83,13 +83,25 @@ async def chat_stream(
     )
 
     # 3. 取得歷史對話（T7-2 多輪）
-    history = _get_history(db, conversation.id, exclude_message_id=user_message.id)
+    history = _get_history(db, conversation.id, tenant_id=current_user.tenant_id, exclude_message_id=user_message.id)
 
     orchestrator = ChatOrchestrator()
 
     async def event_generator():
         start_time = time.time()
         full_answer = ""
+
+        # ── Langfuse trace（整條 RAG 流程） ──
+        from app.services.langfuse_client import get_langfuse
+        lf = get_langfuse()
+        lf_trace = None
+        if lf:
+            lf_trace = lf.trace(
+                name="rag_chat",
+                user_id=str(current_user.id),
+                metadata={"tenant_id": str(current_user.tenant_id), "conversation_id": str(conversation.id)},
+                input=request.question,
+            )
 
         try:
             # Phase 1: 狀態 — 正在檢索
@@ -111,6 +123,17 @@ async def chat_stream(
 
             # 立即推送來源
             yield _sse({"type": "sources", "sources": ctx["sources"]})
+
+            # ── Langfuse: 記錄 retrieved chunk 品質分數 ──
+            if lf_trace:
+                chunk_scores = [s.get("score", 0) for s in ctx.get("sources", []) if isinstance(s, dict)]
+                avg_score = round(sum(chunk_scores) / len(chunk_scores), 4) if chunk_scores else 0
+                lf_trace.span(
+                    name="retrieval",
+                    input=effective_question,
+                    output={"num_sources": len(ctx.get("sources", [])), "avg_chunk_score": avg_score, "has_policy": ctx["has_policy"], "has_labor_law": ctx["has_labor_law"]},
+                    metadata={"top_k": request.top_k, "chunk_scores": chunk_scores[:10]},
+                )
 
             # Phase 3: 串流生成
             yield _sse({"type": "status", "content": "正在生成回答..."})
@@ -169,8 +192,24 @@ async def chat_stream(
                 output_tokens=output_tokens,
                 pinecone_queries=1 if ctx["has_policy"] else 0,
                 embedding_calls=0,
-                metadata={"conversation_id": str(conversation.id)},
+                metadata={
+                    "conversation_id": str(conversation.id),
+                    "langfuse_trace_id": lf_trace.id if lf_trace else None,
+                },
             )
+
+            # ── Langfuse: 記錄 LLM generation ──
+            if lf_trace:
+                lf_trace.generation(
+                    name="gemini_generation",
+                    model=orchestrator._model_name(),
+                    input=request.question,
+                    output=clean_answer[:500],
+                    usage={"input": input_tokens, "output": output_tokens},
+                    metadata={"latency_ms": int((time.time() - start_time) * 1000)},
+                )
+                lf_trace.update(output=clean_answer[:500])
+                lf.flush()
 
             yield _sse({
                 "type": "done",
@@ -246,7 +285,7 @@ async def chat(
     )
     
     # 3. 取得歷史對話（T7-2）
-    history = _get_history(db, conversation.id, exclude_message_id=user_message.id)
+    history = _get_history(db, conversation.id, tenant_id=current_user.tenant_id, exclude_message_id=user_message.id)
 
     # 4. 使用協調器處理查詢
     orchestrator = ChatOrchestrator()
@@ -372,7 +411,7 @@ def get_conversation_messages(
         )
     
     messages = crud_chat.get_conversation_messages(
-        db, conversation_id=conversation_id, skip=skip, limit=limit
+        db, conversation_id=conversation_id, tenant_id=current_user.tenant_id, skip=skip, limit=limit
     )
     return messages
 
@@ -462,7 +501,7 @@ async def export_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="對話不存在")
 
-    messages = crud_chat.get_conversation_messages(db, conversation_id=conversation_id)
+    messages = crud_chat.get_conversation_messages(db, conversation_id=conversation_id, tenant_id=current_user.tenant_id)
 
     lines = [f"# {conversation.title or '對話記錄'}\n"]
     lines.append(f"> 匯出時間：{time.strftime('%Y-%m-%d %H:%M')}\n\n---\n")
@@ -525,12 +564,13 @@ def _sse(data: dict) -> str:
 def _get_history(
     db: Session,
     conversation_id: UUID,
+    tenant_id: UUID,
     exclude_message_id: UUID = None,
     max_turns: int = 5,
 ) -> List[dict]:
     """取得最近 N 輪歷史訊息（T7-2）。"""
     messages = crud_chat.get_conversation_messages(
-        db, conversation_id=conversation_id, skip=0, limit=100
+        db, conversation_id=conversation_id, tenant_id=tenant_id, skip=0, limit=100
     )
     history = []
     for msg in messages:

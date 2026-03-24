@@ -53,9 +53,10 @@ services:
     command: >
       celery -A app.celery_app worker
         --loglevel=info
-        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-8}
         --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
-        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-1048576}
+        --queues=celery,bulk
     volumes:
       - .:/code
     environment:
@@ -65,7 +66,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
       - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
-    mem_limit: 1g
+    mem_limit: 2g
     healthcheck:
       test: ["CMD-SHELL", "ps aux | grep -q '[c]elery.*worker' || exit 1"]
       interval: 30s
@@ -91,6 +92,24 @@ services:
       - "3004:80"
     depends_on:
       - web
+
+  mcp:
+    build: .
+    command: python -m app.mcp_server
+    volumes:
+      - .:/code
+    ports:
+      - "8100:8100"
+    environment:
+      - UNIHR_API_URL=http://web:8000
+      - UNIHR_API_TOKEN=${UNIHR_MCP_TOKEN:-}
+      - MCP_ENABLED=true
+      - MCP_TRANSPORT=sse
+      - MCP_SSE_PORT=8100
+    depends_on:
+      - web
+    profiles:
+      - mcp
 
 volumes:
   postgres_data:

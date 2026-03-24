@@ -72,6 +72,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build & push admin-api image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: admin_service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/admin-api:staging
+            ${{ env.IMAGE_PREFIX }}/admin-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       # ── Deploy via SSH ──
       - name: Deploy to staging server
         uses: appleboy/ssh-action@v1
@@ -83,11 +95,21 @@ jobs:
             set -e
             cd /opt/unihr
 
+            echo "${{ secrets.GHCR_READ_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+
+            export BACKEND_IMAGE="${{ env.IMAGE_PREFIX }}/backend:staging"
+            export FRONTEND_IMAGE="${{ env.IMAGE_PREFIX }}/frontend:staging"
+            export ADMIN_FRONTEND_IMAGE="${{ env.IMAGE_PREFIX }}/admin-frontend:staging"
+            export ADMIN_API_IMAGE="${{ env.IMAGE_PREFIX }}/admin-api:staging"
+
             # Pull latest images
-            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml pull web worker frontend admin-frontend admin-api
 
             # Rolling restart (zero-downtime)
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            # Run migrations after deploy
+            docker compose -f docker-compose.prod.yml exec -T web alembic upgrade head
 
             # Wait for health check
             sleep 10

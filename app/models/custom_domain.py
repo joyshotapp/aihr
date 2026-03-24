@@ -22,6 +22,10 @@ class CustomDomain(Base):
 
     # SSL status
     ssl_provisioned = Column(Boolean, default=False)
+    ssl_status = Column(String(32), nullable=False, default="pending_dns")
+    ssl_last_error = Column(String(500), nullable=True)
+    ssl_requested_at = Column(DateTime(timezone=True), nullable=True)
+    ssl_provisioned_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

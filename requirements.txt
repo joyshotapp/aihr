@@ -37,11 +37,20 @@ email-validator
 aiofiles>=23.2.1
 python-magic>=0.4.27
 reportlab>=4.1.0
+sendgrid>=6.11.0
+pycryptodome>=3.20.0
 
 # ── Phase 3: 進階文檔解析 ──
 jieba>=0.42.1
-llama-parse>=0.6.0
+llama-cloud-services>=0.6.3
+llama-parse>=0.6.90  # backward compat wrapper, pulls in llama-cloud-services
 llama-index-core>=0.14.0
 python-pptx>=1.0.0
 trafilatura>=2.0.0
 nest-asyncio>=1.6.0
+
+# ── Phase 12: LLMOps 可觀測性 ──
+langfuse>=2.0.0
+
+# ── Phase 12: MCP Server ──
+mcp>=1.0.0

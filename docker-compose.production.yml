@@ -16,6 +16,10 @@ services:
     restart: always
     environment:
       - APP_ENV=production
+      - RLS_ENFORCEMENT_ENABLED=true
+      - CLAMAV_ENABLED=true
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
       - RATE_LIMIT_ENABLED=true
       - ADMIN_IP_WHITELIST_ENABLED=true
     # Remove source code mount — use baked-in image
@@ -26,16 +30,18 @@ services:
     command: >
       celery -A app.celery_app worker
         --loglevel=info
-        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-8}
         --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
-        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-1048576}
+        --queues=celery,bulk
     restart: always
     environment:
       - APP_ENV=production
+      - RLS_ENFORCEMENT_ENABLED=true
       - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
       - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
     volumes: []
-    mem_limit: 1g
+    mem_limit: 2g
 
   db:
     restart: always
@@ -65,3 +71,9 @@ services:
 
   frontend:
     restart: always
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: always
+    expose:
+      - "3310"

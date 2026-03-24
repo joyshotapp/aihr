@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, tenants, users, documents, kb, chat, audit, departments, admin, sso, feature_flags, tenant_admin, analytics, public, custom_domains, subscription, regions
+from app.api.v1.endpoints import auth, tenants, users, documents, kb, chat, audit, departments, admin, sso, feature_flags, tenant_admin, analytics, public, custom_domains, subscription, regions, billing, payment
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["login"])
@@ -19,3 +19,5 @@ api_router.include_router(public.router, prefix="/public", tags=["public"])
 api_router.include_router(custom_domains.router, prefix="/domains", tags=["custom-domains"])
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
 api_router.include_router(regions.router, prefix="/regions", tags=["multi-region"])
+api_router.include_router(billing.router, prefix="/billing", tags=["billing"])
+api_router.include_router(payment.router, prefix="/payment", tags=["payment"])

@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useBranding } from '../contexts/BrandingContext'
-import { MessageSquare, FileText, BarChart3, LogOut, Shield, ClipboardList, Building2, KeyRound, Palette, CreditCard, Globe, MapPin, Activity, Menu, X, Gauge } from 'lucide-react'
+import { MessageSquare, FileText, BarChart3, LogOut, Shield, ClipboardList, Building2, KeyRound, Palette, CreditCard, Globe, MapPin, Activity, Menu, X, Gauge, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx'
+import SupportWidget from './SupportWidget'
 
 const navItems = [
   { to: '/', icon: MessageSquare, label: 'AI 問答' },
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/custom-domains', icon: Globe, label: '自訂域名', roles: ['owner', 'admin'] },
   { to: '/regions', icon: MapPin, label: '區域資訊', roles: ['owner', 'admin'] },
   { to: '/rag-dashboard', icon: Gauge, label: 'RAG 儀表板', roles: ['owner', 'admin', 'hr'] },
+  { to: '/quality-dashboard', icon: ShieldCheck, label: '品質監控', roles: ['owner', 'admin'] },
   { to: '/sso-settings', icon: KeyRound, label: 'SSO 設定', roles: ['owner', 'admin'] },
 ]
 
@@ -143,6 +145,7 @@ export default function Layout() {
         <main className="flex-1 overflow-hidden">
           <Outlet />
         </main>
+        <SupportWidget />
       </div>
     </div>
   )

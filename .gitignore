@@ -60,6 +60,7 @@ node_modules/
 # ---------- 其他 ----------
 *.bak
 *.tmp
+test_*.txt
 
 # ---------- 測試結果原始跑次（保留命名版本）----------
 test-data/test-results/run_*/

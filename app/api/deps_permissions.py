@@ -11,10 +11,20 @@ from app.crud import crud_permission
 from app.api import deps
 
 
+def _ensure_privileged_mfa(current_user: User) -> None:
+    privileged = current_user.is_superuser or current_user.role in ["owner", "admin", "hr"]
+    if privileged and not current_user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="管理角色必須先啟用 2FA 才能執行此操作",
+        )
+
+
 def require_superuser(current_user: User = Depends(deps.get_current_active_user)) -> User:
     """Dependency: require current user to be a superuser."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Superuser access required")
+    _ensure_privileged_mfa(current_user)
     return current_user
 
 
@@ -35,12 +45,14 @@ class PermissionChecker:
     
     def __call__(self, current_user: User = Depends(deps.get_current_active_user)) -> User:
         if current_user.is_superuser:
+            _ensure_privileged_mfa(current_user)
             return current_user
         if current_user.role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"此操作需要以下角色之一: {', '.join(self.allowed_roles)}"
             )
+        _ensure_privileged_mfa(current_user)
         return current_user
 
 

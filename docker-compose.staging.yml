@@ -8,17 +8,23 @@ services:
     restart: always
     environment:
       - APP_ENV=staging
+      - RLS_ENFORCEMENT_ENABLED=true
+      - CLAMAV_ENABLED=true
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
 
   worker:
     env_file: .env.staging
     command: >
       celery -A app.celery_app worker
         --loglevel=info
-        --concurrency=${CELERY_WORKER_CONCURRENCY:-2}
+        --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
         --max-tasks-per-child=${CELERY_WORKER_MAX_TASKS_PER_CHILD:-100}
-        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-524288}
+        --max-memory-per-child=${CELERY_WORKER_MAX_MEMORY_PER_CHILD_KB:-1048576}
+        --queues=celery,bulk
     restart: always
     environment:
+      - RLS_ENFORCEMENT_ENABLED=true
       - CELERY_TASK_SOFT_TIME_LIMIT_SECONDS=${CELERY_TASK_SOFT_TIME_LIMIT_SECONDS:-300}
       - CELERY_TASK_TIME_LIMIT_SECONDS=${CELERY_TASK_TIME_LIMIT_SECONDS:-360}
 
@@ -40,3 +46,9 @@ services:
 
   frontend:
     restart: always
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: always
+    expose:
+      - "3310"

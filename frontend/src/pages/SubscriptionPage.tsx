@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
-import { subscriptionApi } from '../api'
-import { CreditCard, Check, ArrowUp, Zap, X, AlertTriangle } from 'lucide-react'
+import { subscriptionApi, billingApi, paymentApi } from '../api'
+import type { BillingRecord } from '../api'
+import { CreditCard, Check, ArrowUp, Zap, X, AlertTriangle, Receipt, Download } from 'lucide-react'
 
 interface Plan {
   name: string
   display_name: string
   price_monthly_usd: number
   price_yearly_usd: number
+  price_monthly_twd: number
+  price_yearly_twd: number
   max_users: number | null
   max_documents: number | null
   max_storage_mb: number | null
@@ -45,6 +48,7 @@ export default function SubscriptionPage() {
   const [upgrading, setUpgrading] = useState(false)
   const [msg, setMsg] = useState('')
   const [upgradeTarget, setUpgradeTarget] = useState<Plan | null>(null)
+  const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -54,6 +58,7 @@ export default function SubscriptionPage() {
       setPlans(p)
       setCurrent(c)
     })
+    billingApi.list().then(setBillingRecords).catch(() => { console.warn('Failed to load billing records') })
   }, [])
 
   const handleUpgrade = async (planName: string) => {
@@ -61,10 +66,22 @@ export default function SubscriptionPage() {
     setMsg('')
     setUpgradeTarget(null)
     try {
-      const result = await subscriptionApi.upgrade(planName)
-      setMsg(result.message)
-      const c = await subscriptionApi.current()
-      setCurrent(c)
+      // Call NewebPay checkout API to get form fields
+      const checkout = await paymentApi.checkout(planName)
+      // Auto-submit form to NewebPay MPG
+      const form = document.createElement('form')
+      form.method = 'POST'
+      form.action = checkout.mpg_url
+      form.style.display = 'none'
+      for (const [key, value] of Object.entries(checkout.form_fields)) {
+        const input = document.createElement('input')
+        input.type = 'hidden'
+        input.name = key
+        input.value = String(value)
+        form.appendChild(input)
+      }
+      document.body.appendChild(form)
+      form.submit()
     } catch (e: any) {
       setMsg(e?.response?.data?.detail || '升級失敗')
     } finally {
@@ -73,6 +90,20 @@ export default function SubscriptionPage() {
   }
 
   const formatLimit = (val: number | null) => val === null ? '無限制' : val.toLocaleString()
+
+  const handleDownloadInvoice = async (id: string, invoiceNumber?: string | null) => {
+    try {
+      const blob = await billingApi.downloadPdf(id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `invoice-${invoiceNumber || id}.pdf`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setMsg('發票下載失敗，請稍後再試')
+    }
+  }
 
   return (
     <div className="flex h-full flex-col overflow-auto">
@@ -121,7 +152,7 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {msg && <p className={`mb-4 text-sm ${msg.includes('已升級') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>}
+        {msg && <p className={`mb-4 text-sm ${msg.includes('已升級') || msg.includes('成功') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>}
 
         {/* Plan Cards */}
         <div className="grid gap-6 md:grid-cols-3">
@@ -137,11 +168,11 @@ export default function SubscriptionPage() {
                 <div className="mb-4">
                   <h3 className="text-xl font-bold text-gray-900">{plan.display_name}</h3>
                   <p className="mt-1">
-                    <span className="text-3xl font-bold text-gray-900">${plan.price_monthly_usd}</span>
+                    <span className="text-3xl font-bold text-gray-900">NT${plan.price_monthly_twd.toLocaleString()}</span>
                     <span className="text-sm text-gray-500"> /月</span>
                   </p>
-                  {plan.price_yearly_usd > 0 && (
-                    <p className="text-xs text-gray-400">年繳 ${plan.price_yearly_usd}/年（省 {Math.round((1 - plan.price_yearly_usd / (plan.price_monthly_usd * 12)) * 100)}%）</p>
+                  {plan.price_yearly_twd > 0 && (
+                    <p className="text-xs text-gray-400">年繳 NT${plan.price_yearly_twd.toLocaleString()}/年（省 {Math.round((1 - plan.price_yearly_twd / (plan.price_monthly_twd * 12)) * 100)}%）</p>
                   )}
                 </div>
 
@@ -181,6 +212,65 @@ export default function SubscriptionPage() {
             )
           })}
         </div>
+
+        {/* Billing History */}
+        {billingRecords.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+              <Receipt className="h-5 w-5 text-gray-600" />
+              帳單紀錄
+            </h2>
+            <div className="overflow-hidden rounded-lg border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">說明</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">方案</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">金額</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">狀態</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">發票號碼</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">PDF</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {billingRecords.map(r => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleDateString('zh-TW')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">{r.description || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 capitalize">{r.plan || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
+                        ${r.currency === 'TWD' ? `NT$${r.amount_usd.toLocaleString()}` : `$${r.amount_usd.toFixed(2)}`} {r.currency}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                          r.status === 'paid' ? 'bg-green-100 text-green-700' :
+                          r.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          r.status === 'failed' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {r.status === 'paid' ? '已付' : r.status === 'pending' ? '待付' : r.status === 'failed' ? '失敗' : r.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{r.invoice_number || '-'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDownloadInvoice(r.id, r.invoice_number)}
+                          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                          title="下載 PDF"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Upgrade Confirmation Modal */}
@@ -216,12 +306,12 @@ export default function SubscriptionPage() {
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
                 <p className="text-sm text-amber-800">
                   <span className="font-medium">費用：</span>
-                  ${upgradeTarget.price_monthly_usd}/月
-                  {upgradeTarget.price_yearly_usd > 0 && (
-                    <span className="text-xs ml-1">（年繳 ${upgradeTarget.price_yearly_usd}/年）</span>
+                  NT${upgradeTarget.price_monthly_twd.toLocaleString()}/月
+                  {upgradeTarget.price_yearly_twd > 0 && (
+                    <span className="text-xs ml-1">（年繳 NT${upgradeTarget.price_yearly_twd.toLocaleString()}/年）</span>
                   )}
                 </p>
-                <p className="text-xs text-amber-600 mt-1">升級後立即生效，費用將按比例計算</p>
+                <p className="text-xs text-amber-600 mt-1">升級後立即生效，將導向藍新金流付款頁面</p>
               </div>
 
               {/* New features gained */}

@@ -6,22 +6,66 @@ import type {
   SSEEvent, FeedbackCreate, FeedbackResponse, SearchResult,
 } from './types'
 
-const api = axios.create({ baseURL: '/api/v1' })
+export interface LoginResponse {
+  token_type: string
+  mfa_required?: boolean
+  mfa_token?: string
+}
 
-// ─── Request interceptor: attach JWT ───
+export interface MFAStatusResponse {
+  enabled: boolean
+  eligible: boolean
+  enabled_at?: string | null
+}
+
+export interface MFASetupResponse {
+  secret: string
+  otpauth_uri: string
+  setup_token: string
+}
+
+function getCookie(name: string) {
+  return document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split('=')[1] || null
+}
+
+const api = axios.create({ baseURL: '/api/v1', withCredentials: true })
+
+// ─── Request interceptor: attach CSRF token for unsafe requests ───
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  const method = (config.method || 'get').toUpperCase()
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = getCookie('unihr_csrf')
+    if (csrf) config.headers['X-CSRF-Token'] = decodeURIComponent(csrf)
+  }
   return config
 })
 
-// ─── Response interceptor: auto-logout on 401 ───
+let refreshPromise: Promise<void> | null = null
+
+async function refreshSession() {
+  await api.post<LoginResponse>('/auth/refresh', {}, { _skipRefresh: true } as any)
+}
+
+// ─── Response interceptor: attempt refresh, then redirect on 401 ───
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+  async (err) => {
+    const originalRequest = (err.config || {}) as { _retry?: boolean; _skipRefresh?: boolean; _skipAuthRedirect?: boolean }
+    if (originalRequest._skipAuthRedirect) {
+      return Promise.reject(err)
+    }
+    if (err.response?.status === 401 && !originalRequest._retry && !originalRequest._skipRefresh) {
+      originalRequest._retry = true
+      try {
+        refreshPromise ??= refreshSession().finally(() => { refreshPromise = null })
+        await refreshPromise
+        return api(originalRequest as any)
+      } catch {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(err)
   },
@@ -33,18 +77,50 @@ export const authApi = {
     const params = new URLSearchParams()
     params.append('username', email)
     params.append('password', password)
-    const { data } = await api.post<{ access_token: string }>('/auth/login/access-token', params, {
+    const { data } = await api.post<LoginResponse>('/auth/login/access-token', params, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
     return data
   },
-  me: () => api.get<User>('/users/me').then(r => r.data),
+  verifyMfaLogin: async (mfa_token: string, code: string) => {
+    const { data } = await api.post<LoginResponse>('/auth/mfa/verify-login', { mfa_token, code })
+    return data
+  },
+  refresh: async (options?: { silent?: boolean }) => {
+    const config = options?.silent ? ({ _skipRefresh: true, _skipAuthRedirect: true } as any) : undefined
+    const { data } = await api.post<LoginResponse>('/auth/refresh', {}, config)
+    return data
+  },
+  logout: async () => {
+    const { data } = await api.post<{ msg: string }>('/auth/logout', {})
+    return data
+  },
+  acceptInvite: (body: { token: string; full_name: string; password: string; agree_terms: boolean }) =>
+    api.post<{ msg: string; email: string }>('/auth/accept-invite', body).then(r => r.data),
+  register: (body: { email: string; password: string; full_name: string; company_name: string; agree_terms: boolean }) =>
+    api.post<{ msg: string; email: string }>('/auth/register', body).then(r => r.data),
+  verifyEmail: (token: string) =>
+    api.post<{ msg: string; already_verified: boolean }>('/auth/verify-email', { token }).then(r => r.data),
+  resendVerification: (email: string) =>
+    api.post<{ msg: string }>('/auth/resend-verification', { email }).then(r => r.data),
+  me: () => api.get<User>('/users/me', { _skipAuthRedirect: true } as any).then(r => r.data),
+  mfaStatus: () => api.get<MFAStatusResponse>('/auth/mfa/status').then(r => r.data),
+  mfaSetup: () => api.post<MFASetupResponse>('/auth/mfa/setup').then(r => r.data),
+  mfaEnable: (setup_token: string, code: string) =>
+    api.post<MFAStatusResponse>('/auth/mfa/enable', { setup_token, code }).then(r => r.data),
+  mfaDisable: (password: string, code: string) =>
+    api.post<MFAStatusResponse>('/auth/mfa/disable', { password, code }).then(r => r.data),
+  exportMyData: () =>
+    api.get('/users/me/export', { responseType: 'blob' }).then(r => r.data),
+  deleteMyAccount: (password: string) =>
+    api.post<{ msg: string }>('/users/me/delete', { password, confirm: true }).then(r => r.data),
 }
 
 // ─── Documents ───
 export const docApi = {
   list: (params?: { department_id?: string }) => api.get<Document[]>('/documents/', { params }).then(r => r.data),
   get: (id: string) => api.get<Document>(`/documents/${id}`).then(r => r.data),
+  progress: (id: string) => api.get<{ document_id: string; status: string; pct: number; detail: string }>(`/documents/${id}/progress`).then(r => r.data),
   upload: (file: File, onProgress?: (pct: number) => void) => {
     const form = new FormData()
     form.append('file', file)
@@ -67,12 +143,13 @@ export const chatApi = {
 
   /** T7-1: SSE streaming chat */
   stream: (req: ChatRequest, onEvent: (event: SSEEvent) => void, signal?: AbortSignal): Promise<void> => {
-    const token = localStorage.getItem('token')
+    const csrf = getCookie('unihr_csrf')
     return fetch('/api/v1/chat/chat/stream', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
       },
       body: JSON.stringify(req),
       signal,
@@ -145,22 +222,25 @@ export const companyApi = {
   profile: () => api.get('/company/profile').then(r => r.data),
   quota: () => api.get('/company/quota').then(r => r.data),
   users: () => api.get('/company/users').then(r => r.data),
-  inviteUser: (data: { email: string; full_name?: string; role: string; password: string }) =>
+  inviteUser: (data: { email: string; full_name?: string; role: string }) =>
     api.post('/company/users/invite', data).then(r => r.data),
   updateUser: (id: string, data: Record<string, unknown>) =>
     api.put(`/company/users/${id}`, data).then(r => r.data),
   deactivateUser: (id: string) => api.delete(`/company/users/${id}`).then(r => r.data),
   usageSummary: () => api.get('/company/usage/summary').then(r => r.data),
   usageByUser: () => api.get('/company/usage/by-user').then(r => r.data),
-  branding: () => api.get('/company/branding').then(r => r.data),
+  branding: () => api.get('/company/branding', { _skipAuthRedirect: true } as any).then(r => r.data),
   updateBranding: (data: Record<string, unknown>) =>
     api.put('/company/branding', data).then(r => r.data),
+  qualityDashboard: (days = 30) =>
+    api.get('/company/quality/dashboard', { params: { days } }).then(r => r.data),
 }
 
 // ─── Public (no auth) ───
 export const publicApi = {
   branding: (params?: { domain?: string; tenant_id?: string }) =>
     api.get('/public/branding', { params }).then(r => r.data),
+  support: () => api.get<{ enabled: boolean; email: string; docs_url: string; booking_url: string }>('/public/support').then(r => r.data),
 }
 
 // ─── Subscription (T4-17) ───
@@ -171,6 +251,41 @@ export const subscriptionApi = {
   checkFeature: (feature: string) => api.get('/subscription/feature-check', { params: { feature } }).then(r => r.data),
   exportUsage: (params?: Record<string, string>) =>
     api.get('/subscription/usage/export', { params, responseType: 'blob' }).then(r => r.data),
+}
+
+// ─── Payment (藍新金流) ───
+export interface CheckoutResponse {
+  mpg_url: string
+  form_fields: Record<string, string>
+  trade_no: string
+}
+
+export const paymentApi = {
+  checkout: (target_plan: string) =>
+    api.post<CheckoutResponse>('/payment/checkout', { target_plan }).then(r => r.data),
+}
+
+// ─── Billing ───
+export interface BillingRecord {
+  id: string
+  external_id?: string | null
+  amount_usd: number  // TWD for NewebPay, USD for legacy
+  currency: string
+  status: 'paid' | 'pending' | 'failed' | 'refunded' | string
+  description?: string | null
+  plan?: string | null
+  period_start?: string | null
+  period_end?: string | null
+  invoice_number?: string | null
+  created_at: string
+}
+
+export const billingApi = {
+  list: (params?: { limit?: number; offset?: number }) =>
+    api.get<BillingRecord[]>('/billing/', { params }).then(r => r.data),
+  get: (id: string) => api.get<BillingRecord>(`/billing/${id}`).then(r => r.data),
+  downloadPdf: (id: string) =>
+    api.get(`/billing/${id}/pdf`, { responseType: 'blob' }).then(r => r.data),
 }
 
 // ─── SSO ───
@@ -186,7 +301,7 @@ export const ssoApi = {
     api.post<{ state: string }>('/auth/sso/state', body).then(r => r.data),
   /** Exchange OAuth code for JWT */
   callback: (body: { code: string; redirect_uri: string; tenant_id: string; provider: string; state: string; code_verifier: string }) =>
-    api.post<{ access_token: string; token_type: string }>('/auth/sso/callback', body).then(r => r.data),
+    api.post<{ token_type: string }>('/auth/sso/callback', body).then(r => r.data),
   /** Admin: list SSO configs (requires auth) */
   listConfigs: () => api.get('/auth/sso/config').then(r => r.data),
   /** Admin: create / upsert SSO config */

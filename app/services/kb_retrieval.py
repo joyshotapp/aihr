@@ -21,8 +21,11 @@ from uuid import UUID
 import voyageai
 
 from app.config import settings
-from app.db.session import SessionLocal
+from app.db.session import create_session
 from app.models.document import DocumentChunk, Document
+from app.services.circuit_breaker import (
+    voyage_breaker, pinecone_breaker, CircuitOpenError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,11 @@ try:
     _HAS_PINECONE = True
 except ImportError:
     _HAS_PINECONE = False
+
+# ── 模組級 BM25 索引快取（跨請求復用，避免每次查詢全量載入）──
+import time as _time
+_BM25_CACHE: Dict[str, Dict[str, Any]] = {}  # tenant_id → {bm25, chunks, doc_map, built_at}
+_BM25_CACHE_TTL = 300  # 5 分鐘 TTL（安全網）
 
 
 class KnowledgeBaseRetriever:
@@ -211,7 +219,7 @@ class KnowledgeBaseRetriever:
                 logger.warning(f"Pinecone stats 查詢失敗: {e}")
 
         # Fallback: PostgreSQL chunk count
-        db = SessionLocal()
+        db = create_session(tenant_id=tenant_id)
         try:
             total_chunks = (
                 db.query(DocumentChunk)
@@ -241,48 +249,145 @@ class KnowledgeBaseRetriever:
         top_k: int = 10,
         filter_dict: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
-        """使用 Pinecone 進行語意向量檢索"""
-        if not self._pinecone_index:
-            logger.warning("Pinecone 未初始化，語意檢索不可用")
-            return []
+        """使用 Pinecone 進行語意向量檢索，Pinecone 不可用時降級至 pgvector"""
         try:
             # 1. 取得查詢向量
-            query_embedding = self.voyage_client.embed(
+            embed_result = voyage_breaker.call(
+                self.voyage_client.embed,
                 [query], model=settings.VOYAGE_MODEL, input_type="query",
-            ).embeddings[0]
+            )
+            query_embedding = embed_result.embeddings[0]
 
-            # 2. Pinecone query（以 tenant namespace 隔離）
-            pinecone_filter: Dict = {}
-            if filter_dict:
-                for k, v in filter_dict.items():
-                    pinecone_filter[k] = {"$in": [str(i) for i in v]} if isinstance(v, list) else {"$eq": str(v)}
+            # ── Langfuse: 記錄 Voyage query embedding token 數 ──
+            from app.services.langfuse_client import get_langfuse
+            lf = get_langfuse()
+            if lf:
+                total_tokens = getattr(embed_result, "total_tokens", None) or 0
+                lf.generation(
+                    name="voyage_embed_query",
+                    model=settings.VOYAGE_MODEL,
+                    input=query[:200],
+                    metadata={"input_type": "query", "total_tokens": total_tokens},
+                    usage={"total_tokens": total_tokens} if total_tokens else None,
+                )
+        except Exception as e:
+            logger.error(f"Voyage 嵌入查詢失敗，語意檢索不可用: {e}")
+            return []
 
-            response = self._pinecone_index.query(
-                vector=query_embedding,
-                top_k=top_k,
-                namespace=str(tenant_id),
-                include_metadata=True,
-                filter=pinecone_filter if pinecone_filter else None,
+        # 2. 嘗試 Pinecone
+        if self._pinecone_index:
+            try:
+                pinecone_filter: Dict = {}
+                if filter_dict:
+                    for k, v in filter_dict.items():
+                        pinecone_filter[k] = {"$in": [str(i) for i in v]} if isinstance(v, list) else {"$eq": str(v)}
+
+                response = pinecone_breaker.call(
+                    self._pinecone_index.query,
+                    vector=query_embedding,
+                    top_k=top_k,
+                    namespace=str(tenant_id),
+                    include_metadata=True,
+                    filter=pinecone_filter if pinecone_filter else None,
+                )
+
+                results = []
+                for match in response.matches:
+                    meta = match.metadata or {}
+                    results.append({
+                        "id": match.id,
+                        "score": round(float(match.score), 4),
+                        "content": meta.get("text", ""),
+                        "document_id": meta.get("document_id", ""),
+                        "filename": meta.get("filename", ""),
+                        "chunk_index": int(meta.get("chunk_index", 0)),
+                        "metadata": meta,
+                        "source": "semantic",
+                    })
+                return results
+            except CircuitOpenError:
+                logger.warning("Pinecone 斷路器開啟，降級至 pgvector 語意檢索")
+            except Exception as e:
+                logger.warning(f"Pinecone 查詢失敗，降級至 pgvector: {e}")
+        else:
+            logger.info("Pinecone 未初始化，使用 pgvector 語意檢索")
+
+        # 3. Fallback: pgvector cosine similarity
+        return self._pgvector_semantic_search(
+            tenant_id, query_embedding, top_k, filter_dict,
+        )
+
+    def _pgvector_semantic_search(
+        self,
+        tenant_id: UUID,
+        query_embedding: List[float],
+        top_k: int = 10,
+        filter_dict: Optional[Dict] = None,
+    ) -> List[Dict[str, Any]]:
+        """使用 PostgreSQL pgvector 進行語意向量檢索（Pinecone fallback）"""
+        db = create_session(tenant_id=tenant_id)
+        try:
+            # cosine_distance 回傳 0~2，轉換為 similarity = 1 - distance
+            distance_col = DocumentChunk.embedding.cosine_distance(query_embedding)
+
+            query_obj = (
+                db.query(DocumentChunk, distance_col.label("distance"))
+                .filter(
+                    DocumentChunk.tenant_id == tenant_id,
+                    DocumentChunk.embedding.isnot(None),
+                )
             )
 
-            # 3. 格式化結果
+            if filter_dict:
+                if "document_id" in filter_dict:
+                    val = filter_dict["document_id"]
+                    if isinstance(val, list):
+                        query_obj = query_obj.filter(
+                            DocumentChunk.document_id.in_([UUID(str(v)) for v in val])
+                        )
+                    else:
+                        query_obj = query_obj.filter(
+                            DocumentChunk.document_id == UUID(str(val))
+                        )
+
+            rows = (
+                query_obj
+                .order_by(distance_col.asc())
+                .limit(top_k)
+                .all()
+            )
+
+            # 取得文件名映射
+            doc_ids = list({row[0].document_id for row in rows})
+            doc_map: Dict = {}
+            if doc_ids:
+                docs = db.query(Document).filter(
+                    Document.id.in_(doc_ids),
+                    Document.tenant_id == tenant_id,
+                ).all()
+                doc_map = {d.id: d.filename for d in docs}
+
             results = []
-            for match in response.matches:
-                meta = match.metadata or {}
+            for chunk, distance in rows:
+                similarity = max(0.0, 1.0 - float(distance))
                 results.append({
-                    "id": match.id,
-                    "score": round(float(match.score), 4),
-                    "content": meta.get("text", ""),
-                    "document_id": meta.get("document_id", ""),
-                    "filename": meta.get("filename", ""),
-                    "chunk_index": int(meta.get("chunk_index", 0)),
-                    "metadata": meta,
-                    "source": "semantic",
+                    "id": str(chunk.id),
+                    "score": round(similarity, 4),
+                    "content": chunk.text or "",
+                    "document_id": str(chunk.document_id),
+                    "filename": doc_map.get(chunk.document_id, ""),
+                    "chunk_index": chunk.chunk_index,
+                    "metadata": chunk.metadata_json or {},
+                    "source": "semantic_pgvector",
                 })
+
+            logger.info("pgvector 語意檢索完成: %d 筆結果", len(results))
             return results
         except Exception as e:
-            logger.error(f"Pinecone 語意檢索錯誤: {e}")
+            logger.error(f"pgvector 語意檢索失敗: {e}")
             return []
+        finally:
+            db.close()
 
     # ─────────────────────────────────────────────
     # BM25 關鍵字檢索
@@ -294,40 +399,55 @@ class KnowledgeBaseRetriever:
         query: str,
         top_k: int = 10,
     ) -> List[Dict[str, Any]]:
-        """使用 BM25 在 DB chunks 上做關鍵字檢索"""
+        """使用 BM25 在 DB chunks 上做關鍵字檢索（帶模組級快取）"""
         if not _HAS_BM25:
             logger.warning("rank_bm25 未安裝，關鍵字檢索不可用")
             return []
 
         try:
-            db = SessionLocal()
-            try:
-                chunks = (
-                    db.query(DocumentChunk)
-                    .filter(DocumentChunk.tenant_id == tenant_id)
-                    .all()
-                )
-                if not chunks:
-                    return []
+            cache_key = str(tenant_id)
+            now = _time.monotonic()
+            cached = _BM25_CACHE.get(cache_key)
 
-                # 取得文件名映射
-                doc_ids = list({c.document_id for c in chunks})
-                docs = db.query(Document).filter(
-                    Document.id.in_(doc_ids),
-                    Document.tenant_id == tenant_id,
-                ).all()
-                doc_map = {d.id: d.filename for d in docs}
-            finally:
-                db.close()
+            if cached and (now - cached["built_at"]) < _BM25_CACHE_TTL:
+                bm25 = cached["bm25"]
+                chunks = cached["chunks"]
+                doc_map = cached["doc_map"]
+            else:
+                # 重建 BM25 索引
+                db = create_session(tenant_id=tenant_id)
+                try:
+                    chunks = (
+                        db.query(DocumentChunk)
+                        .filter(DocumentChunk.tenant_id == tenant_id)
+                        .all()
+                    )
+                    if not chunks:
+                        return []
 
-            # 建立 BM25 索引
-            corpus = [self._tokenize(c.text or "") for c in chunks]
-            bm25 = BM25Okapi(corpus)
+                    doc_ids = list({c.document_id for c in chunks})
+                    docs = db.query(Document).filter(
+                        Document.id.in_(doc_ids),
+                        Document.tenant_id == tenant_id,
+                    ).all()
+                    doc_map = {d.id: d.filename for d in docs}
+                finally:
+                    db.close()
+
+                corpus = [self._tokenize(c.text or "") for c in chunks]
+                bm25 = BM25Okapi(corpus)
+
+                _BM25_CACHE[cache_key] = {
+                    "bm25": bm25,
+                    "chunks": chunks,
+                    "doc_map": doc_map,
+                    "built_at": now,
+                }
+                logger.debug("BM25 索引已重建: tenant=%s, chunks=%d", tenant_id, len(chunks))
 
             query_tokens = self._tokenize(query)
             scores = bm25.get_scores(query_tokens)
 
-            # 取 Top-K
             ranked = sorted(
                 enumerate(scores), key=lambda x: x[1], reverse=True
             )[:top_k]
@@ -340,7 +460,7 @@ class KnowledgeBaseRetriever:
                 chunk = chunks[idx]
                 results.append({
                     "id": str(chunk.id),
-                    "score": round(score / max_score, 4),  # 正規化到 0~1
+                    "score": round(score / max_score, 4),
                     "content": chunk.text or "",
                     "document_id": str(chunk.document_id),
                     "filename": doc_map.get(chunk.document_id, ""),
@@ -464,7 +584,8 @@ class KnowledgeBaseRetriever:
         try:
             documents = [r.get("content", "")[:2000] for r in results]
 
-            reranked = self.voyage_client.rerank(
+            reranked = voyage_breaker.call(
+                self.voyage_client.rerank,
                 query=query,
                 documents=documents,
                 model="rerank-2",
@@ -477,6 +598,19 @@ class KnowledgeBaseRetriever:
                 original["score"] = round(item.relevance_score, 4)
                 original["reranked"] = True
                 reranked_results.append(original)
+
+            # ── Langfuse: 記錄 rerank token 數 ──
+            from app.services.langfuse_client import get_langfuse
+            lf = get_langfuse()
+            if lf:
+                total_tokens = getattr(reranked, "total_tokens", None) or 0
+                lf.generation(
+                    name="voyage_rerank",
+                    model="rerank-2",
+                    input=query[:200],
+                    metadata={"num_documents": len(documents), "top_k": top_k, "total_tokens": total_tokens},
+                    usage={"total_tokens": total_tokens} if total_tokens else None,
+                )
 
             return reranked_results
 
@@ -531,10 +665,12 @@ class KnowledgeBaseRetriever:
 
     def invalidate_cache(self, tenant_id: UUID):
         """清除租戶的所有檢索快取（文件新增/刪除時呼叫）"""
+        # 清除 BM25 模組級快取
+        _BM25_CACHE.pop(str(tenant_id), None)
+
         if not self._redis:
             return
         try:
-            # 刪除所有此租戶的快取 key
             cursor = 0
             match_pattern = f"kb:search:{tenant_id}:*"
             while True:

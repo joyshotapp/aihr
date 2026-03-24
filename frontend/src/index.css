@@ -5,6 +5,8 @@
     --color-primary: #d15454;
     --color-primary-hover: #c04444;
     --color-primary-light: rgba(209, 84, 84, 0.1);
+    --color-secondary: #1e40af;
+    --color-secondary-hover: #1a3590;
   }
   body {
     @apply bg-gray-50 text-gray-900 antialiased;

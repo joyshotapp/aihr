@@ -1,52 +1,63 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
-import { authApi, ssoApi } from './api'
+import { authApi, ssoApi, type LoginResponse } from './api'
 import type { User } from './types'
 
 interface AuthState {
   user: User | null
   token: string | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<LoginResponse>
+  completeMfaLogin: (mfaToken: string, code: string) => Promise<void>
   loginWithSSO: (code: string, redirectUri: string, tenantId: string, provider: string, state: string, codeVerifier: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
+  const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchUser = useCallback(async () => {
     try {
       const u = await authApi.me()
       setUser(u)
+      setToken('cookie-session')
     } catch {
-      setToken(null)
-      setUser(null)
-      localStorage.removeItem('token')
+      try {
+        await authApi.refresh({ silent: true })
+        const u = await authApi.me()
+        setUser(u)
+        setToken('cookie-session')
+      } catch {
+        setToken(null)
+        setUser(null)
+      }
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (token) {
-      fetchUser()
-    } else {
-      setLoading(false)
-    }
-  }, [token, fetchUser])
+    fetchUser()
+  }, [fetchUser])
 
   const login = async (email: string, password: string) => {
-    const { access_token } = await authApi.login(email, password)
-    localStorage.setItem('token', access_token)
-    setToken(access_token)
+    const result = await authApi.login(email, password)
+    if (!result.mfa_required) {
+      await fetchUser()
+    }
+    return result
+  }
+
+  const completeMfaLogin = async (mfaToken: string, code: string) => {
+    await authApi.verifyMfaLogin(mfaToken, code)
+    await fetchUser()
   }
 
   const loginWithSSO = async (code: string, redirectUri: string, tenantId: string, provider: string, state: string, codeVerifier: string) => {
-    const { access_token } = await ssoApi.callback({
+    await ssoApi.callback({
       code,
       redirect_uri: redirectUri,
       tenant_id: tenantId,
@@ -54,18 +65,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       state,
       code_verifier: codeVerifier,
     })
-    localStorage.setItem('token', access_token)
-    setToken(access_token)
+    await fetchUser()
   }
 
-  const logout = () => {
-    localStorage.removeItem('token')
+  const logout = async () => {
+    try {
+      await authApi.logout()
+    } catch {
+      // ignore logout errors and clear local state anyway
+    }
     setToken(null)
     setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, loginWithSSO, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, completeMfaLogin, loginWithSSO, logout }}>
       {children}
     </AuthContext.Provider>
   )

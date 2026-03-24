@@ -10,6 +10,7 @@ from app.middleware.ip_whitelist import AdminIPWhitelistMiddleware
 from app.middleware.request_logging import RequestLoggingMiddleware
 from app.middleware.metrics import PrometheusMiddleware, metrics_endpoint, set_app_info
 from app.middleware.custom_domain import CustomDomainMiddleware
+from app.middleware.csrf import CSRFMiddleware
 from app.logging_config import setup_logging
 import logging
 
@@ -107,8 +108,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Requested-With"],
 )
 
 # API versioning middleware – adds deprecation headers to v1 responses
@@ -125,6 +126,9 @@ app.add_middleware(PrometheusMiddleware)
 
 # Custom domain resolution middleware (T4-6) – resolves tenant from Host header
 app.add_middleware(CustomDomainMiddleware)
+
+# CSRF middleware – validates double-submit token for cookie-authenticated unsafe requests
+app.add_middleware(CSRFMiddleware)
 
 # Rate limiting middleware (only in non-development or when explicitly enabled)
 if settings.RATE_LIMIT_ENABLED and not settings.is_development:
