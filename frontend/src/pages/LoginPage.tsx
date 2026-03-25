@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { ssoApi } from '../api'
-import { Loader2, Mail, Building2, ArrowLeft } from 'lucide-react'
+import { Loader2, Mail, Building2, ArrowLeft, ShieldCheck, Sparkles, Clock3 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import PublicPageShell from '../components/PublicPageShell'
 
 // ─── SSO helpers ───
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -66,9 +67,14 @@ export default function LoginPage() {
     providers: { provider: string; client_id: string }[]
   } | null>(null)
 
+  const handleResetSso = () => {
+    setShowSSO(false)
+    setSsoDiscovered(null)
+    setSsoEmail('')
+  }
+
   // Discover SSO by email domain
-  const handleSSODiscover = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSSODiscover = async () => {
     if (!ssoEmail.includes('@')) {
       toast.error('請輸入有效的工作電子郵件')
       return
@@ -167,24 +173,53 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-rose-50 via-red-50 to-orange-50 p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex items-center justify-center">
-            <img
-              src="/Upower-LOGO.jpg"
-              alt="Upower 優利資源整合"
-              className="h-20 w-auto object-contain drop-shadow-md"
-            />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">UniHR</h1>
-          <p className="mt-1 text-sm" style={{ color: '#d15454' }}>企業專屬AI人資長</p>
+    <PublicPageShell
+      mainClassName="relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-orange-50"
+      contentClassName="mx-auto grid min-h-[calc(100vh-168px)] max-w-6xl gap-10 px-6 py-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20"
+    >
+      <section className="order-2 lg:order-1">
+        <div className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white/80 px-4 py-1.5 text-sm font-medium text-[#d15454] shadow-sm backdrop-blur">
+          <Sparkles className="h-4 w-4" />
+          企業專屬AI人資長
         </div>
+        <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+          用同一個入口
+          <br />
+          連回你的 HR 知識工作台
+        </h1>
+        <p className="mt-5 max-w-xl text-base leading-7 text-gray-600 sm:text-lg">
+          登入後即可存取企業文件知識庫、AI 問答、使用量追蹤與管理設定。若貴公司已啟用 SSO，也能直接以工作帳號完成登入。
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {[
+            { icon: ShieldCheck, title: '安全登入', desc: 'HttpOnly cookie、CSRF 與角色權限控管。' },
+            { icon: Building2, title: '組織辨識', desc: '輸入公司信箱即可自動發現 SSO 設定。' },
+            { icon: Clock3, title: '快速回到工作', desc: '登入後直接前往 /app 工作台。' },
+          ].map((item) => (
+            <div key={item.title} className="rounded-2xl border border-white/70 bg-white/80 p-5 shadow-sm backdrop-blur">
+              <item.icon className="h-5 w-5 text-[#d15454]" />
+              <h2 className="mt-4 text-sm font-semibold text-gray-900">{item.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-gray-500">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        {/* Form */}
-        <form onSubmit={mfaToken ? handleMfaSubmit : handleSubmit} className="rounded-2xl bg-white p-8 shadow-xl">
-          <h2 className="mb-6 text-lg font-semibold text-gray-900">歡迎登入</h2>
+      <section className="order-1 lg:order-2">
+        <div className="mx-auto w-full max-w-md rounded-[28px] border border-white/80 bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.08)] sm:p-10">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-5 flex items-center justify-center">
+              <img
+                src="/Upower-LOGO.jpg"
+                alt="Upower 優利資源整合"
+                className="h-20 w-auto object-contain drop-shadow-md"
+              />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">歡迎登入</h2>
+            <p className="mt-2 text-sm text-gray-500">輸入帳號密碼，或用工作信箱啟動 SSO。</p>
+          </div>
+
+          <form onSubmit={mfaToken ? handleMfaSubmit : handleSubmit} className="space-y-6">
 
           {!mfaToken ? (
             <div className="space-y-4">
@@ -241,113 +276,106 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
-            style={{ backgroundColor: '#d15454' }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#c04444')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d15454')}
-          >
-            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-            {loading ? '登入中...' : mfaToken ? '驗證 2FA' : '登入'}
-          </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: '#d15454' }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#c04444')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d15454')}
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? '登入中...' : mfaToken ? '驗證 2FA' : '登入'}
+            </button>
 
-          {/* Divider */}
-          {!mfaToken && <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-            <div className="relative flex justify-center">
-              <button type="button" onClick={() => { setShowSSO(!showSSO); setSsoDiscovered(null); setSsoEmail('') }} className="bg-white px-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-                {showSSO ? '隱藏 SSO 登入' : '使用 SSO 登入'}
-              </button>
-            </div>
-          </div>}
-
-          {/* SSO Section — Email-based auto-discovery */}
-          {!mfaToken && showSSO && !ssoDiscovered && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Mail className="h-4 w-4" style={{ color: '#d15454' }} />
-                <span>輸入工作信箱，系統自動識別您的組織</span>
-              </div>
-              <form onSubmit={handleSSODiscover} className="flex gap-2">
-                <input
-                  type="email"
-                  value={ssoEmail}
-                  onChange={(e) => setSsoEmail(e.target.value)}
-                  placeholder="name@yourcompany.com"
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={ssoDiscovering}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors whitespace-nowrap"
-                  style={{ backgroundColor: '#d15454' }}
-                  onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#c04444')}
-                  onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d15454')}
-                >
-                  {ssoDiscovering ? <Loader2 className="h-4 w-4 animate-spin" /> : '查詢'}
-                </button>
-              </form>
-            </div>
-          )}
-
-          {/* SSO Discovered — show tenant info + provider buttons */}
-          {!mfaToken && showSSO && ssoDiscovered && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-green-600" />
-                  <div>
-                    <p className="text-sm font-medium text-green-800">{ssoDiscovered.tenant_name}</p>
-                    <p className="text-xs text-green-600">{ssoEmail}</p>
-                  </div>
-                </div>
+            {!mfaToken && <div className="relative">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+              <div className="relative flex justify-center">
                 <button
                   type="button"
-                  onClick={() => { setSsoDiscovered(null); setSsoEmail('') }}
-                  className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors"
+                  onClick={() => (showSSO ? handleResetSso() : setShowSSO(true))}
+                  className="bg-white px-3 text-xs text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  <ArrowLeft className="h-3 w-3" />
-                  重新查詢
+                  {showSSO ? '隱藏 SSO 登入' : '使用 SSO 登入'}
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                {ssoDiscovered.providers.map((p) => (
+            </div>}
+
+            {!mfaToken && showSSO && !ssoDiscovered && (
+              <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Mail className="h-4 w-4" style={{ color: '#d15454' }} />
+                  <span>輸入工作信箱，系統自動識別您的組織</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={ssoEmail}
+                    onChange={(e) => setSsoEmail(e.target.value)}
+                    placeholder="name@yourcompany.com"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[#d15454] focus:ring-2 focus:ring-[#d15454]/20 focus:outline-none"
+                    required
+                  />
                   <button
-                    key={p.provider}
                     type="button"
-                    onClick={() => startSSO(p.provider as 'google' | 'microsoft', p.client_id)}
-                    className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    onClick={() => void handleSSODiscover()}
+                    disabled={ssoDiscovering}
+                    className="whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 transition-colors"
+                    style={{ backgroundColor: '#d15454' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#c04444')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#d15454')}
                   >
-                    {p.provider === 'google' ? <GoogleIcon /> : <MicrosoftIcon />}
-                    {p.provider === 'google' ? 'Google' : 'Microsoft'}
+                    {ssoDiscovering ? <Loader2 className="h-4 w-4 animate-spin" /> : '查詢'}
                   </button>
-                ))}
+                </div>
               </div>
-              {ssoDiscovered.providers.length === 0 && (
-                <p className="text-center text-xs text-gray-400">此組織尚未啟用 SSO 供應商</p>
-              )}
-            </div>
-          )}
-        </form>
+            )}
 
-        <p className="mt-6 text-center text-sm text-gray-500">
-          還沒有帳號？
-          <Link to="/signup" className="ml-1 font-medium text-[#d15454] hover:underline">免費註冊</Link>
-        </p>
+            {!mfaToken && showSSO && ssoDiscovered && (
+              <div className="space-y-3 rounded-2xl border border-green-100 bg-green-50/70 p-4">
+                <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-green-600" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800">{ssoDiscovered.tenant_name}</p>
+                      <p className="text-xs text-green-600">{ssoEmail}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSsoDiscovered(null); setSsoEmail('') }}
+                    className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 transition-colors"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    重新查詢
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {ssoDiscovered.providers.map((p) => (
+                    <button
+                      key={p.provider}
+                      type="button"
+                      onClick={() => startSSO(p.provider as 'google' | 'microsoft', p.client_id)}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      {p.provider === 'google' ? <GoogleIcon /> : <MicrosoftIcon />}
+                      {p.provider === 'google' ? 'Google' : 'Microsoft'}
+                    </button>
+                  ))}
+                </div>
+                {ssoDiscovered.providers.length === 0 && (
+                  <p className="text-center text-xs text-gray-400">此組織尚未啟用 SSO 供應商</p>
+                )}
+              </div>
+            )}
+          </form>
 
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-500">
-          <Link to="/privacy" className="transition-colors hover:text-gray-800">隱私權政策</Link>
-          <span className="text-gray-300">|</span>
-          <Link to="/terms" className="transition-colors hover:text-gray-800">服務條款</Link>
+          <p className="mt-6 text-center text-sm text-gray-500">
+            還沒有帳號？
+            <Link to="/signup" className="ml-1 font-medium text-[#d15454] hover:underline">免費註冊</Link>
+          </p>
         </div>
-
-        <p className="mt-4 text-center text-xs text-gray-400">
-          © 2026 Upower UniHR. All rights reserved.
-        </p>
-      </div>
-    </div>
+      </section>
+    </PublicPageShell>
   )
 }

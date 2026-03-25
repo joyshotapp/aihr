@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../api'
 import { Building2, Mail, User, Lock, ArrowRight, Check } from 'lucide-react'
+import PublicPageShell from '../components/PublicPageShell'
 
 export default function SignupPage() {
   const [companyName, setCompanyName] = useState('')
@@ -54,7 +55,10 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-white via-rose-50/30 to-orange-50/20 px-4">
+      <PublicPageShell
+        mainClassName="bg-gradient-to-br from-white via-rose-50/30 to-orange-50/20"
+        contentClassName="mx-auto flex min-h-[calc(100vh-168px)] max-w-6xl items-center justify-center px-6 py-12"
+      >
         <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-10 text-center shadow-xl">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
             <Mail className="h-8 w-8 text-emerald-600" />
@@ -85,15 +89,17 @@ export default function SignupPage() {
             前往登入頁面
           </Link>
         </div>
-      </div>
+      </PublicPageShell>
     )
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left — Form */}
-      <div className="flex flex-1 items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md">
+    <PublicPageShell
+      mainClassName="bg-gradient-to-br from-white via-rose-50/40 to-orange-50/30"
+      contentClassName="mx-auto grid min-h-[calc(100vh-168px)] max-w-6xl gap-10 px-6 py-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-20"
+    >
+      <div className="flex items-center justify-center lg:justify-start">
+        <div className="w-full max-w-md rounded-[28px] border border-white/80 bg-white p-8 shadow-[0_24px_80px_rgba(0,0,0,0.08)] sm:p-10">
           <Link to="/" className="text-2xl font-bold tracking-tight text-gray-900">
             Uni<span className="text-[#d15454]">HR</span>
           </Link>
@@ -226,21 +232,21 @@ export default function SignupPage() {
         </div>
       </div>
 
-      {/* Right — Decorative */}
-      <div className="hidden w-[45%] bg-gradient-to-br from-rose-50 via-orange-50/50 to-amber-50/30 lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12">
-        <div className="max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900">企業專屬AI人資長</h2>
-          <p className="mt-3 text-sm leading-relaxed text-gray-500">
+      <div className="rounded-[32px] border border-white/60 bg-white/60 p-8 shadow-sm backdrop-blur lg:p-12">
+        <div className="max-w-lg">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#d15454]">Public Site</p>
+          <h2 className="mt-4 text-3xl font-bold text-gray-900 sm:text-4xl">企業專屬AI人資長</h2>
+          <p className="mt-4 text-base leading-relaxed text-gray-500">
             讓每位員工都能即時取得公司規章的精準解答，減少 HR 重複回答，提升整體效率。
           </p>
-          <div className="mt-8 space-y-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {[
               '上傳公司規章，AI 自動建立知識庫',
               '員工用自然語言提問，即時取得答案',
               '多租戶隔離，資料安全有保障',
               '符合台灣個人資料保護法',
             ].map((item) => (
-              <div key={item} className="flex items-center gap-3">
+              <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/80 px-4 py-4 shadow-sm">
                 <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100">
                   <Check className="h-3.5 w-3.5 text-emerald-600" />
                 </div>
@@ -248,8 +254,14 @@ export default function SignupPage() {
               </div>
             ))}
           </div>
+          <div className="mt-10 rounded-2xl border border-rose-100 bg-rose-50/80 p-5">
+            <p className="text-sm font-semibold text-gray-900">註冊後可立即使用</p>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              公開網站提供方案、FAQ、聯絡資訊與註冊入口；登入後則進入 `/app` 工作台處理文件、問答與管理流程。
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+    </PublicPageShell>
   )
 }
