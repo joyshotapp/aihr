@@ -229,7 +229,7 @@ export default function SignupPage() {
       {/* Right — Decorative */}
       <div className="hidden w-[45%] bg-gradient-to-br from-rose-50 via-orange-50/50 to-amber-50/30 lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12">
         <div className="max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900">AI 驅動的人資知識庫</h2>
+          <h2 className="text-2xl font-bold text-gray-900">企業專屬AI人資長</h2>
           <p className="mt-3 text-sm leading-relaxed text-gray-500">
             讓每位員工都能即時取得公司規章的精準解答，減少 HR 重複回答，提升整體效率。
           </p>

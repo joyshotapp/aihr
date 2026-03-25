@@ -179,7 +179,7 @@ export default function LoginPage() {
             />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">UniHR</h1>
-          <p className="mt-1 text-sm" style={{ color: '#d15454' }}>企業人資 AI 助理平台</p>
+          <p className="mt-1 text-sm" style={{ color: '#d15454' }}>企業專屬AI人資長</p>
         </div>
 
         {/* Form */}

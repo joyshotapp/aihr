@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { MessageSquare, FileText, Shield, Users, Zap, BarChart3, ArrowRight, Check } from 'lucide-react'
 
 const FEATURES = [
-  { icon: MessageSquare, title: 'AI 智慧問答', desc: '上傳公司規章，員工直接用自然語言提問，AI 即時回覆正確答案。' },
+  { icon: MessageSquare, title: 'AI 智慧問答', desc: '上傳公司規章，員工直接用自然語言提問，AI人資長即時回覆正確答案。' },
   { icon: FileText, title: '文件知識庫', desc: '支援 PDF、Word、Excel 等格式，自動解析並建立可搜尋的向量知識庫。' },
   { icon: Shield, title: '多租戶隔離', desc: '每間公司資料完全隔離，符合個資法規範，企業級安全防護。' },
   { icon: Users, title: '團隊協作', desc: '依角色分權管理（Owner / Admin / HR / 員工），靈活掌控存取範圍。' },
@@ -13,7 +13,7 @@ const FEATURES = [
 const STEPS = [
   { num: '1', title: '註冊帳號', desc: '輸入公司名稱與 Email，30 秒完成。' },
   { num: '2', title: '上傳文件', desc: '拖曳公司規章、辦法、FAQ 到知識庫。' },
-  { num: '3', title: '開始提問', desc: '員工直接向 AI 助理提問，立即獲得答案。' },
+  { num: '3', title: '開始提問', desc: '員工直接向AI人資長提問，立即獲得答案。' },
 ]
 
 export default function LandingPage() {
@@ -48,12 +48,12 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-4xl px-6 pb-20 pt-24 text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-1.5 text-sm font-medium text-[#d15454]">
             <Zap className="h-4 w-4" />
-            AI 驅動的人資知識管理
+            企業專屬AI人資長
           </div>
           <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">
             讓每位員工都有
             <br />
-            <span className="text-[#d15454]">專屬 HR 助理</span>
+            <span className="text-[#d15454]">專屬AI人資長</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-500">
             上傳公司規章制度，AI 自動建立知識庫。員工隨時提問，即時獲得準確解答。
@@ -145,7 +145,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h2 className="text-3xl font-bold text-gray-900">準備好了嗎？</h2>
           <p className="mt-4 text-lg text-gray-500">
-            免費方案無需信用卡，立即體驗 AI 人資助理。
+            免費方案無需信用卡，立即體驗企業專屬AI人資長。
           </p>
           <Link
             to="/signup"
