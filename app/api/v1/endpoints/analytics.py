@@ -357,6 +357,9 @@ class MonthlyPnLRow(BaseModel):
     cost: float = 0.0
     profit: float = 0.0
     margin_pct: Optional[float] = None
+    queries: int = 0
+    total_tokens: int = 0
+    embedding_calls: int = 0
 
 
 class PlatformPnLSummary(BaseModel):
@@ -366,10 +369,21 @@ class PlatformPnLSummary(BaseModel):
     monthly_cost: float = 0.0
     monthly_profit: float = 0.0
     monthly_margin_pct: Optional[float] = None
+    # 本月使用量
+    monthly_queries: int = 0
+    monthly_input_tokens: int = 0
+    monthly_output_tokens: int = 0
+    monthly_embedding_calls: int = 0
+    monthly_pinecone_queries: int = 0
     # 累計
     total_revenue: float = 0.0
     total_cost: float = 0.0
     total_profit: float = 0.0
+    # 累計使用量
+    total_queries: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_embedding_calls: int = 0
     # MRR（當月活躍租戶 × 方案月費）
     mrr: float = 0.0
     # 租戶分佈
@@ -395,6 +409,10 @@ class TenantPnLRow(BaseModel):
     margin_pct: Optional[float] = None
     monthly_queries: int = 0
     monthly_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    embedding_calls: int = 0
+    pinecone_queries: int = 0
     avg_cost_per_query: float = 0.0
 
 
@@ -435,6 +453,30 @@ def platform_pnl_summary(
 
     monthly_profit = monthly_revenue - monthly_cost
     monthly_margin_pct = round(monthly_profit / monthly_revenue * 100, 1) if monthly_revenue > 0 else None
+
+    # ── 本月使用量統計 ──
+    m_usage = (
+        db.query(
+            func.count(UsageRecord.id).label("queries"),
+            func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
+            func.coalesce(func.sum(UsageRecord.pinecone_queries), 0).label("pinecone_queries"),
+        )
+        .filter(UsageRecord.created_at >= month_start)
+        .one()
+    )
+
+    # ── 累計使用量 ──
+    t_usage = (
+        db.query(
+            func.count(UsageRecord.id).label("queries"),
+            func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
+        )
+        .one()
+    )
 
     # ── 累計收入 / 支出 ──
     total_revenue = float(
@@ -490,6 +532,15 @@ def platform_pnl_summary(
         )
         profit = rev - cost
         margin = round(profit / rev * 100, 1) if rev > 0 else None
+        m_trend_usage = (
+            db.query(
+                func.count(UsageRecord.id).label("queries"),
+                func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("total_tokens"),
+                func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
+            )
+            .filter(UsageRecord.created_at >= ms, UsageRecord.created_at < me)
+            .one()
+        )
         monthly_trend.append(
             MonthlyPnLRow(
                 month=f"{y}-{m:02d}",
@@ -497,6 +548,9 @@ def platform_pnl_summary(
                 cost=round(cost, 6),
                 profit=round(profit, 2),
                 margin_pct=margin,
+                queries=m_trend_usage.queries or 0,
+                total_tokens=int(m_trend_usage.total_tokens or 0),
+                embedding_calls=int(m_trend_usage.embedding_calls or 0),
             )
         )
 
@@ -527,9 +581,18 @@ def platform_pnl_summary(
         monthly_cost=round(monthly_cost, 6),
         monthly_profit=round(monthly_profit, 2),
         monthly_margin_pct=monthly_margin_pct,
+        monthly_queries=m_usage.queries or 0,
+        monthly_input_tokens=int(m_usage.input_tokens or 0),
+        monthly_output_tokens=int(m_usage.output_tokens or 0),
+        monthly_embedding_calls=int(m_usage.embedding_calls or 0),
+        monthly_pinecone_queries=int(m_usage.pinecone_queries or 0),
         total_revenue=round(total_revenue, 2),
         total_cost=round(total_cost, 6),
         total_profit=round(total_revenue - total_cost, 2),
+        total_queries=t_usage.queries or 0,
+        total_input_tokens=int(t_usage.input_tokens or 0),
+        total_output_tokens=int(t_usage.output_tokens or 0),
+        total_embedding_calls=int(t_usage.embedding_calls or 0),
         mrr=round(mrr, 2),
         free_tenants=free_count,
         pro_tenants=pro_count,
@@ -591,6 +654,10 @@ def tenant_pnl_list(
             UsageRecord.tenant_id,
             func.count(UsageRecord.id).label("queries"),
             func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
+            func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
+            func.coalesce(func.sum(UsageRecord.pinecone_queries), 0).label("pinecone_queries"),
             func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
         )
         .filter(UsageRecord.created_at >= ms, UsageRecord.created_at < me)
@@ -638,6 +705,10 @@ def tenant_pnl_list(
                 margin_pct=margin,
                 monthly_queries=queries,
                 monthly_tokens=tokens,
+                input_tokens=int(cost_row.input_tokens) if cost_row else 0,
+                output_tokens=int(cost_row.output_tokens) if cost_row else 0,
+                embedding_calls=int(cost_row.embedding_calls) if cost_row else 0,
+                pinecone_queries=int(cost_row.pinecone_queries) if cost_row else 0,
                 avg_cost_per_query=avg_cpq,
             )
         )
@@ -650,6 +721,8 @@ def tenant_pnl_list(
         "margin_pct",
         "monthly_queries",
         "monthly_tokens",
+        "embedding_calls",
+        "pinecone_queries",
     }
     sort_field = sort_by if sort_by in allowed_sorts else "profit"
     field_map = {
@@ -659,6 +732,8 @@ def tenant_pnl_list(
         "margin_pct": "margin_pct",
         "monthly_queries": "monthly_queries",
         "monthly_tokens": "monthly_tokens",
+        "embedding_calls": "embedding_calls",
+        "pinecone_queries": "pinecone_queries",
     }
     attr = field_map.get(sort_field, "monthly_profit")
     reverse = order.lower() != "asc"

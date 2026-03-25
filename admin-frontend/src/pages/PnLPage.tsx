@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   DollarSign, TrendingUp, TrendingDown, Users, FileText,
   ArrowUpRight, ArrowDownRight, Minus, ChevronUp, ChevronDown,
-  RefreshCw,
+  RefreshCw, Zap, Database, Search, Layers,
 } from 'lucide-react'
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -19,6 +19,9 @@ interface MonthlyTrend {
   cost: number
   profit: number
   margin_pct: number | null
+  queries: number
+  total_tokens: number
+  embedding_calls: number
 }
 
 interface CostByAction {
@@ -33,6 +36,15 @@ interface PlatformPnL {
   monthly_cost: number
   monthly_profit: number
   monthly_margin_pct: number | null
+  monthly_queries: number
+  monthly_input_tokens: number
+  monthly_output_tokens: number
+  monthly_embedding_calls: number
+  monthly_pinecone_queries: number
+  total_queries: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_embedding_calls: number
   total_revenue: number
   total_cost: number
   total_profit: number
@@ -57,10 +69,14 @@ interface TenantPnL {
   margin_pct: number | null
   monthly_queries: number
   monthly_tokens: number
+  input_tokens: number
+  output_tokens: number
+  embedding_calls: number
+  pinecone_queries: number
   avg_cost_per_query: number
 }
 
-type SortField = 'profit' | 'cost' | 'revenue' | 'margin_pct' | 'monthly_queries' | 'monthly_tokens'
+type SortField = 'profit' | 'cost' | 'revenue' | 'margin_pct' | 'monthly_queries' | 'monthly_tokens' | 'embedding_calls' | 'pinecone_queries'
 type Tab = 'overview' | 'tenants'
 
 const PIE_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#6366f1', '#0891b2']
@@ -213,8 +229,8 @@ export default function PnLPage() {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">收支總覽</h1>
-            <p className="mt-1 text-sm text-gray-500">Platform P&L Dashboard — 平台收入與支出監控</p>
+            <h1 className="text-2xl font-bold text-gray-900">使用量與收支監控</h1>
+            <p className="mt-1 text-sm text-gray-500">Token・API 用量為核心，盈虧為輔 — {d.current_month}</p>
           </div>
           <button
             onClick={() => { fetchPnl(); if (tab === 'tenants') fetchTenants() }}
@@ -227,8 +243,8 @@ export default function PnLPage() {
         {/* Tabs */}
         <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1">
           {([
-            ['overview', '平台總覽'],
-            ['tenants', '租戶收支明細'],
+            ['overview', '使用量總覽'],
+            ['tenants', '租戶明細'],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -246,35 +262,96 @@ export default function PnLPage() {
         {/* ═══════════════ TAB: OVERVIEW ═══════════════ */}
         {tab === 'overview' && (
           <div className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <SummaryCard
-                title="本月收入"
-                value={formatUSD(d.monthly_revenue)}
-                subtitle={`累計 ${formatUSD(d.total_revenue)}`}
-                icon={DollarSign}
-                trend={d.monthly_revenue > 0 ? 'up' : 'neutral'}
-              />
-              <SummaryCard
-                title="本月支出"
-                value={formatUSD(d.monthly_cost)}
-                subtitle={`累計 ${formatUSD(d.total_cost)}`}
-                icon={TrendingDown}
-                trend={d.monthly_cost > 0 ? 'down' : 'neutral'}
-              />
-              <SummaryCard
-                title="本月毛利"
-                value={formatUSD(d.monthly_profit)}
-                subtitle={d.monthly_margin_pct != null ? `毛利率 ${d.monthly_margin_pct}%` : '尚無收入'}
-                icon={TrendingUp}
-                trend={d.monthly_profit >= 0 ? 'up' : 'down'}
-              />
-              <SummaryCard
-                title="MRR (月經常收入)"
-                value={formatUSD(d.mrr)}
-                subtitle={`${d.free_tenants + d.pro_tenants + d.enterprise_tenants} 家活躍租戶`}
-                icon={Users}
-              />
+            {/* Usage KPIs — PRIMARY */}
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">本月 API 用量（核心指標）</p>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <SummaryCard
+                  title="本月查詢數"
+                  value={formatNumber(d.monthly_queries)}
+                  subtitle={`累計 ${formatNumber(d.total_queries)} 次`}
+                  icon={Search}
+                />
+                <SummaryCard
+                  title="LLM Token 消耗"
+                  value={formatNumber(d.monthly_input_tokens + d.monthly_output_tokens)}
+                  subtitle={`輸入 ${formatNumber(d.monthly_input_tokens)} ／ 輸出 ${formatNumber(d.monthly_output_tokens)}`}
+                  icon={Zap}
+                />
+                <SummaryCard
+                  title="Embedding 呼叫"
+                  value={formatNumber(d.monthly_embedding_calls)}
+                  subtitle={`累計 ${formatNumber(d.total_embedding_calls)} 次`}
+                  icon={Layers}
+                />
+                <SummaryCard
+                  title="向量查詢 (Pinecone)"
+                  value={formatNumber(d.monthly_pinecone_queries)}
+                  subtitle="本月 Pinecone 查詢次數"
+                  icon={Database}
+                />
+              </div>
+            </div>
+
+            {/* Revenue KPIs — SECONDARY */}
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">本月收支（次要參考）</p>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <SummaryCard
+                  title="本月收入"
+                  value={formatUSD(d.monthly_revenue)}
+                  subtitle={`累計 ${formatUSD(d.total_revenue)}`}
+                  icon={DollarSign}
+                  trend={d.monthly_revenue > 0 ? 'up' : 'neutral'}
+                />
+                <SummaryCard
+                  title="本月支出"
+                  value={formatUSD(d.monthly_cost)}
+                  subtitle={`累計 ${formatUSD(d.total_cost)}`}
+                  icon={TrendingDown}
+                  trend={d.monthly_cost > 0 ? 'down' : 'neutral'}
+                />
+                <SummaryCard
+                  title="本月毛利"
+                  value={formatUSD(d.monthly_profit)}
+                  subtitle={d.monthly_margin_pct != null ? `毛利率 ${d.monthly_margin_pct}%` : '尚無收入'}
+                  icon={TrendingUp}
+                  trend={d.monthly_profit >= 0 ? 'up' : 'down'}
+                />
+                <SummaryCard
+                  title="MRR (月經常收入)"
+                  value={formatUSD(d.mrr)}
+                  subtitle={`${d.free_tenants + d.pro_tenants + d.enterprise_tenants} 家活躍租戶`}
+                  icon={Users}
+                />
+              </div>
+            </div>
+
+            {/* Token / API Usage Trend */}
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-4 text-base font-semibold text-gray-900">月度 API 用量趨勢</h2>
+              {d.monthly_trend.some(t => t.total_tokens > 0 || t.queries > 0) ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={d.monthly_trend}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v: number) => formatNumber(v)} />
+                    <Tooltip
+                      formatter={(v: any, name: any) => [
+                        formatNumber(Number(v)),
+                        name === 'total_tokens' ? 'LLM Tokens' : name === 'embedding_calls' ? 'Embedding' : '查詢數',
+                      ]}
+                      labelFormatter={(l: any) => `月份: ${l}`}
+                    />
+                    <Legend formatter={(v: string) => v === 'total_tokens' ? 'LLM Tokens' : v === 'embedding_calls' ? 'Embedding 呼叫' : '查詢數'} />
+                    <Line type="monotone" dataKey="total_tokens" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="embedding_calls" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="queries" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-[220px] items-center justify-center text-gray-400">暫無使用量資料</div>
+              )}
             </div>
 
             {/* Monthly Trend Chart + Tenant Distribution */}
@@ -418,7 +495,19 @@ export default function PnLPage() {
             {/* Cumulative Summary */}
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-3 text-base font-semibold text-gray-900">累計統計</h2>
-              <div className="grid grid-cols-3 gap-6 text-center">
+              <div className="grid grid-cols-3 gap-6 text-center lg:grid-cols-6">
+                <div>
+                  <p className="text-sm text-gray-500">累計查詢數</p>
+                  <p className="mt-1 text-xl font-bold text-blue-600">{formatNumber(d.total_queries)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">累計 LLM Tokens</p>
+                  <p className="mt-1 text-xl font-bold text-indigo-600">{formatNumber(d.total_input_tokens + d.total_output_tokens)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">累計 Embedding</p>
+                  <p className="mt-1 text-xl font-bold text-purple-600">{formatNumber(d.total_embedding_calls)}</p>
+                </div>
                 <div>
                   <p className="text-sm text-gray-500">累計總收入</p>
                   <p className="mt-1 text-xl font-bold text-blue-600">{formatUSD(d.total_revenue)}</p>
@@ -493,19 +582,31 @@ export default function PnLPage() {
                       >
                         Token<SortIcon field="monthly_tokens" />
                       </th>
+                      <th
+                        className="cursor-pointer px-3 py-3 text-right font-medium text-gray-500 hover:text-gray-900"
+                        onClick={() => handleSort('embedding_calls')}
+                      >
+                        Embedding<SortIcon field="embedding_calls" />
+                      </th>
+                      <th
+                        className="cursor-pointer px-3 py-3 text-right font-medium text-gray-500 hover:text-gray-900"
+                        onClick={() => handleSort('pinecone_queries')}
+                      >
+                        向量查詢<SortIcon field="pinecone_queries" />
+                      </th>
                       <th className="px-3 py-3 text-right font-medium text-gray-500">每查詢成本</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {tenantLoading ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-gray-400">
+                        <td colSpan={13} className="py-12 text-center text-gray-400">
                           <div className="mx-auto h-6 w-6 animate-spin rounded-full border-4 border-red-600 border-t-transparent" />
                         </td>
                       </tr>
                     ) : tenants.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-gray-400">暫無租戶資料</td>
+                        <td colSpan={13} className="py-12 text-center text-gray-400">暫無租戶資料</td>
                       </tr>
                     ) : (
                       tenants.map(t => (
@@ -535,6 +636,8 @@ export default function PnLPage() {
                           </td>
                           <td className="px-3 py-3 text-right text-gray-600">{formatNumber(t.monthly_queries)}</td>
                           <td className="px-3 py-3 text-right text-gray-600">{formatNumber(t.monthly_tokens)}</td>
+                          <td className="px-3 py-3 text-right text-gray-600">{formatNumber(t.embedding_calls)}</td>
+                          <td className="px-3 py-3 text-right text-gray-600">{formatNumber(t.pinecone_queries)}</td>
                           <td className="px-3 py-3 text-right text-gray-500">{formatUSD(t.avg_cost_per_query)}</td>
                         </tr>
                       ))
@@ -571,6 +674,12 @@ export default function PnLPage() {
                         </td>
                         <td className="px-3 py-3 text-right text-gray-600">
                           {formatNumber(tenants.reduce((s, t) => s + t.monthly_tokens, 0))}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-600">
+                          {formatNumber(tenants.reduce((s, t) => s + t.embedding_calls, 0))}
+                        </td>
+                        <td className="px-3 py-3 text-right text-gray-600">
+                          {formatNumber(tenants.reduce((s, t) => s + t.pinecone_queries, 0))}
                         </td>
                         <td className="px-3 py-3 text-right text-gray-500">
                           {(() => {
