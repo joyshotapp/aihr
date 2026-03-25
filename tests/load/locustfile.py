@@ -23,7 +23,6 @@ UniHR SaaS 負載測試腳本 — Locust
 """
 
 import os
-import json
 import random
 import string
 from locust import HttpUser, task, between, tag, events

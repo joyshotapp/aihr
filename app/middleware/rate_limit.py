@@ -12,7 +12,7 @@ import ipaddress
 from typing import Optional, Tuple
 
 import redis
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 

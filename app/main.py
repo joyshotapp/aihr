@@ -62,7 +62,6 @@ def _ensure_r2_bucket():
         return
     try:
         import boto3
-        from botocore.exceptions import ClientError
         s3 = boto3.client(
             "s3",
             endpoint_url=endpoint,

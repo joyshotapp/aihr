@@ -30,7 +30,7 @@ async def _setup(client, superuser_headers, tax_id):
     })
     await create_user(client, superuser_headers, {
         "email": f"owner@{tid}.com", "password": "Owner123!",
-        "full_name": f"Owner", "role": "owner",
+        "full_name": "Owner", "role": "owner",
         "tenant_id": t["id"],
     })
     h = await login_user(client, f"owner@{tid}.com", "Owner123!")

@@ -6,9 +6,9 @@ from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case, text
+from sqlalchemy import func, text
 from pydantic import BaseModel
 
 from app.api import deps
@@ -18,7 +18,7 @@ from app.models.tenant import Tenant
 from app.models.document import Document
 from app.models.audit import AuditLog, UsageRecord
 from app.models.chat import Conversation
-from app.crud import crud_tenant, crud_user
+from app.crud import crud_tenant
 from app.schemas.tenant import TenantUpdate, QuotaUpdate, QuotaStatus, PLAN_QUOTAS
 from app.services.quota_alerts import QuotaAlertService
 
@@ -352,7 +352,6 @@ def search_users(
     current_user: User = Depends(require_superuser),
 ) -> Any:
     """跨租戶用戶搜尋"""
-    from app.models.permission import Department
     from sqlalchemy.orm import joinedload
 
     q = db.query(User).options(

@@ -19,10 +19,9 @@ import sys
 import time
 import json
 import tempfile
-import textwrap
 import statistics
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -792,7 +791,7 @@ def eval_performance():
         TextChunker.count_tokens(t)
     ms = (time.time() - start) * 1000
     score = 10 if ms < 500 else (7 if ms < 1000 else 3)
-    bench("F.效能", f"Token計算 100×1K字", score, 10, f"{ms:.0f}ms")
+    bench("F.效能", "Token計算 100×1K字", score, 10, f"{ms:.0f}ms")
 
     # F4: 分詞速度
     long_query = "員工請假辦法 employee leave management policy 2024年度最新修訂版本" * 100
@@ -1030,7 +1029,7 @@ def generate_report():
     capabilities = {
         "文件格式覆蓋": f"{len(SUPPORTED_FORMATS)} 種副檔名, 12 種解析器",
         "編碼支援": "UTF-8, UTF-8 BOM, Big5, GBK, CP1252, Latin-1 (chardet 自動偵測)",
-        "切片引擎": f"tiktoken 精確計算, 章節邊界, 表格保護, overlap 重疊",
+        "切片引擎": "tiktoken 精確計算, 章節邊界, 表格保護, overlap 重疊",
         "檢索模式": "語意(Pinecone+Voyage), BM25, 混合(RRF融合), Rerank",
         "安全性": "HTML script/style/nav 清除, XSS 防護",
         "品質控管": "QualityReport 五級評分 (excellent→failed)",

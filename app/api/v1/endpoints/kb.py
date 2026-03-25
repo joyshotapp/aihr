@@ -1,13 +1,10 @@
-from typing import Any, List, Dict
-from uuid import UUID
+from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.models.user import User
 from app.services.kb_retrieval import KnowledgeBaseRetriever
-from app.config import settings
 
 router = APIRouter()
 

@@ -1,5 +1,4 @@
 """Unit tests for feature flag evaluation logic."""
-import pytest
 
 from app.config import settings
 from app.services.feature_flags import is_flag_enabled

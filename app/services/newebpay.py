@@ -20,8 +20,6 @@ import time
 import urllib.parse
 import uuid
 from binascii import hexlify, unhexlify
-from datetime import datetime, timezone
-from typing import Optional
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
@@ -208,7 +206,7 @@ class NewebPayProvider(PaymentProvider):
         merchant_order_no = result.get("MerchantOrderNo", "")
         gateway_trade_no = result.get("TradeNo", "")
         amount = int(result.get("Amt", 0))
-        payment_type = result.get("PaymentType", "")
+        result.get("PaymentType", "")
 
         # Parse tenant_id and plan from OrderComment
         order_comment = result.get("OrderComment", "{}")

@@ -4,7 +4,7 @@ End-to-End Integration Tests: SaaS → Core API
 """
 import pytest
 from httpx import AsyncClient
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from tests.conftest import create_tenant, create_user, login_user
 
 CHAT_URL = "/api/v1/chat/chat"

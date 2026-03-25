@@ -18,7 +18,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -185,7 +185,7 @@ def list_sso_providers(
     """Return enabled SSO providers for a tenant (no secrets)."""
     configs = (
         db.query(TenantSSOConfig)
-        .filter(TenantSSOConfig.tenant_id == tenant_id, TenantSSOConfig.enabled == True)
+        .filter(TenantSSOConfig.tenant_id == tenant_id, TenantSSOConfig.enabled)
         .all()
     )
     return configs
@@ -211,8 +211,8 @@ def discover_sso_by_email(
     matching = (
         db.query(TenantSSOConfig)
         .filter(
-            TenantSSOConfig.enabled == True,
-            TenantSSOConfig.allowed_domains != None,
+            TenantSSOConfig.enabled,
+            TenantSSOConfig.allowed_domains is not None,
             TenantSSOConfig.allowed_domains.contains([domain]),
         )
         .all()
@@ -226,7 +226,7 @@ def discover_sso_by_email(
 
     # Group by first matching tenant
     tenant_id = matching[0].tenant_id
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    db.query(Tenant).filter(Tenant.id == tenant_id).first()
     tenant_name = "已識別組織"
 
     providers = [
@@ -253,7 +253,7 @@ def create_sso_state(
         .filter(
             TenantSSOConfig.tenant_id == body.tenant_id,
             TenantSSOConfig.provider == body.provider,
-            TenantSSOConfig.enabled == True,
+            TenantSSOConfig.enabled,
         )
         .first()
     )
@@ -293,7 +293,7 @@ async def sso_callback(
         .filter(
             TenantSSOConfig.tenant_id == body.tenant_id,
             TenantSSOConfig.provider == body.provider,
-            TenantSSOConfig.enabled == True,
+            TenantSSOConfig.enabled,
         )
         .first()
     )

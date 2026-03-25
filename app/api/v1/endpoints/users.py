@@ -1,6 +1,4 @@
-from typing import Any, List
-from uuid import UUID
-from datetime import datetime, timezone
+from typing import Any
 import json
 import logging
 
@@ -13,7 +11,7 @@ from app.api import deps
 from app.api.deps_permissions import check_user_management_permission
 from app.crud import crud_user, crud_tenant
 from app.models.user import User
-from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user import User as UserSchema, UserCreate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

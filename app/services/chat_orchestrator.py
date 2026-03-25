@@ -530,7 +530,6 @@ class ChatOrchestrator:
         try:
             if self._llm_backend == "gemini" and self._openai_async:
                 # Circuit breaker check (streaming path — record success/failure manually)
-                from app.services.circuit_breaker import CircuitOpenError
                 cb_state = gemini_breaker.state
                 if cb_state.value == "open":
                     yield "目前 AI 模型暫時無法回應，請稍後再試。"

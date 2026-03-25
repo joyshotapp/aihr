@@ -399,7 +399,7 @@ test("settings 有 RETRIEVAL_CACHE_TTL",  hasattr(settings, "RETRIEVAL_CACHE_TTL
 test("settings 有 RETRIEVAL_TOP_K",      hasattr(settings, "RETRIEVAL_TOP_K"))
 test("RETRIEVAL_MODE = 'hybrid'",        settings.RETRIEVAL_MODE == "hybrid")
 
-from app.schemas.document import DocumentUpdate, Document
+from app.schemas.document import DocumentUpdate
 
 du = DocumentUpdate(quality_report={"quality_score": 0.9, "warnings": []})
 test("DocumentUpdate 支援 quality_report", du.quality_report is not None)

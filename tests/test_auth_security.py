@@ -80,7 +80,7 @@ async def test_bearer_header_fallback_still_works(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_csrf_required_for_unsafe_method_with_cookies(client: AsyncClient):
     """POST to protected endpoint without CSRF header must return 403."""
-    login_resp = await client.post(
+    await client.post(
         LOGIN_URL,
         data={"username": SUPERUSER_EMAIL, "password": SUPERUSER_PASSWORD},
     )
@@ -150,7 +150,6 @@ async def test_refresh_rotates_tokens(client: AsyncClient):
 
     # Refresh endpoint — path-restricted cookie may or may not be sent by httpx
     # depending on path matching. Use body fallback if needed.
-    from app.core import security as sec
     # Decode the login response to get the refresh token from cookies
     refresh_token = login_resp.cookies.get(REFRESH_COOKIE)
 
@@ -216,7 +215,7 @@ def test_ssrf_blocks_private_ips():
         "gopher://evil.com/",
     ]
     for url in blocked_urls:
-        with pytest.raises(ValueError, match="(Blocked|Only http|blocked)"):
+        with pytest.raises(ValueError, match="(Blocked|Only http|blocked|\u7981\u6b62|\u53ea\u5141\u8a31)"):
             _validate_external_url(url)
 
 

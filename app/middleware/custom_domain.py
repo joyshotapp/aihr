@@ -52,7 +52,7 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
             try:
                 record = db.query(CustomDomain).filter(
                     CustomDomain.domain == host,
-                    CustomDomain.verified == True,
+                    CustomDomain.verified,
                 ).first()
                 if record:
                     _DOMAIN_CACHE[host] = str(record.tenant_id)

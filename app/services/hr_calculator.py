@@ -6,9 +6,8 @@
 """
 
 import re
-import math
-from datetime import date, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import date
+from typing import Optional, List
 from dataclasses import dataclass
 
 
@@ -116,7 +115,7 @@ def calc_severance(question: str, ref_date: Optional[date] = None) -> Optional[C
         f"月平均工資 = {salary:,} 元",
         f"年資 = {years:.2f} 年" + (f"（到職日 {start_date} 至 {today}）" if start_date else ""),
         f"資遣費基數 = {years:.2f} × 0.5 = {half_months:.2f} 個月" +
-        (f"（超過上限 6 個月，取 6）" if half_months > 6 else ""),
+        ("（超過上限 6 個月，取 6）" if half_months > 6 else ""),
         f"資遣費 = {salary:,} × {half_months_capped:.2f} = {severance:,} 元",
     ]
 

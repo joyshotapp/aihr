@@ -1,6 +1,7 @@
 """Unit tests for SSO state and PKCE flow."""
 import pytest
 from fastapi import HTTPException
+from fastapi.responses import Response
 
 from app.api.v1.endpoints import sso as sso_endpoints
 from app.config import settings
@@ -110,7 +111,7 @@ async def test_callback_rejects_state_mismatch(monkeypatch):
     )
 
     with pytest.raises(HTTPException) as exc:
-        await sso_endpoints.sso_callback(body, db=db)
+        await sso_endpoints.sso_callback(body, response=Response(), db=db)
     assert exc.value.status_code == 400
 
 
@@ -138,5 +139,5 @@ async def test_callback_requires_code_verifier(monkeypatch):
     )
 
     with pytest.raises(HTTPException) as exc:
-        await sso_endpoints.sso_callback(body, db=db)
+        await sso_endpoints.sso_callback(body, response=Response(), db=db)
     assert exc.value.status_code == 400

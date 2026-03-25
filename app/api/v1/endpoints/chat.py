@@ -1,11 +1,11 @@
-from typing import Any, List, Optional
+from typing import Any, List
 from uuid import UUID
 import json
 import logging
 import time
 
 logger = logging.getLogger(__name__)
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,6 @@ from app.schemas.chat import (
     ChatRequest,
     ChatResponse,
     Conversation,
-    ConversationCreate,
     Message,
     FeedbackCreate,
     FeedbackResponse,

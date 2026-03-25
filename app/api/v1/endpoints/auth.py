@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core import security
+from app.db.session import SessionLocal
 from app.core.cookie_auth import set_auth_cookies, clear_auth_cookies, extract_refresh_token
 from app.core.redis_client import get_redis_client
 from app.crud import crud_user, crud_tenant

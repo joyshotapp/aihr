@@ -3,7 +3,7 @@ from uuid import UUID
 from datetime import datetime
 import csv
 import io
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
+from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -197,8 +197,6 @@ def _pdf_stream(title: str, rows: list, columns: list[tuple[str, str]]) -> Strea
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15*mm, bottomMargin=15*mm)

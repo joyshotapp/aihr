@@ -29,7 +29,6 @@ UniHR MCP Server — Model Context Protocol 伺服器
 import os
 import logging
 import httpx
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 

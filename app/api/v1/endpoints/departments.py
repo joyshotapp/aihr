@@ -1,7 +1,7 @@
 """
 部門管理 + 功能權限管理 API
 """
-from typing import Any, List, Optional
+from typing import Any, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,7 +10,6 @@ from app.api import deps
 from app.api.deps_permissions import (
     check_department_permission,
     check_user_management_permission,
-    check_feature_enabled,
 )
 from app.crud import crud_permission
 from app.models.user import User

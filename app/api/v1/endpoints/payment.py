@@ -15,9 +15,8 @@ Flow:
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -154,7 +153,6 @@ async def payment_return(request: Request):
 
 def _handle_payment_success(db: Session, event):
     """Activate plan and create billing record on successful payment."""
-    from app.services.payment_provider import WebhookEvent
 
     if not event.tenant_id or not event.plan:
         logger.warning("payment.success: missing tenant_id or plan")

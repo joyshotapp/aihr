@@ -3,7 +3,6 @@ Billing API — billing history & invoice listing.
 """
 import logging
 from typing import Any, List, Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel

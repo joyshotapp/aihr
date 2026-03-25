@@ -5,10 +5,10 @@
 提供區域資訊查詢、Tenant 區域遷移（Superuser Only）。
 """
 
-from typing import Any, List, Optional
+from typing import Any, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -144,7 +144,7 @@ async def update_tenant_region(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    old_region = getattr(tenant, "region", DEFAULT_REGION)
+    getattr(tenant, "region", DEFAULT_REGION)
     tenant.region = body.region
     db.commit()
     db.refresh(tenant)

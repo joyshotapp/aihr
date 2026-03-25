@@ -38,10 +38,6 @@ class CoreAPIClient:
         if self.service_token:
             headers["Authorization"] = f"Bearer {self.service_token}"
         
-        payload = {
-            "question": question,
-            "request_id": request_id
-        }
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:

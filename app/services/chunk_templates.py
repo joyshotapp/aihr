@@ -18,7 +18,7 @@ UniHR 文件切片模板 (Document Chunk Templates)
 import re
 import logging
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Pattern
+from typing import List, Dict, Optional, Pattern
 
 logger = logging.getLogger(__name__)
 

@@ -16,12 +16,11 @@ from app.api.deps_permissions import require_admin
 from app.models.user import User
 from app.models.tenant import Tenant
 from app.models.document import Document
-from app.models.audit import AuditLog, UsageRecord
+from app.models.audit import UsageRecord
 from app.models.chat import Conversation
 from app.models.sso_config import TenantSSOConfig
 from app.crud import crud_tenant, crud_user
 from app.schemas.tenant import QuotaStatus
-from app.schemas.user import UserUpdate
 
 router = APIRouter()
 
@@ -200,7 +199,7 @@ def get_onboarding_status(
     doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == tid).scalar() or 0
     sso_enabled = (
         db.query(func.count(TenantSSOConfig.id))
-        .filter(TenantSSOConfig.tenant_id == tid, TenantSSOConfig.enabled == True)
+        .filter(TenantSSOConfig.tenant_id == tid, TenantSSOConfig.enabled)
         .scalar()
         or 0
     ) > 0

@@ -14,7 +14,6 @@ UniHR 進階知識庫檢索服務 (Advanced Knowledge Base Retriever)
 import hashlib
 import json
 import logging
-import re
 from typing import List, Dict, Any, Optional
 from uuid import UUID
 

@@ -8,7 +8,7 @@ from uuid import UUID
 from datetime import datetime
 
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Float, JSON, func
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, Float, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 from app.db.base_class import Base
@@ -138,7 +138,7 @@ class QuotaAlertService:
         if alert_type:
             q = q.filter(QuotaAlert.alert_type == alert_type)
         if unnotified_only:
-            q = q.filter(QuotaAlert.notified == False)
+            q = q.filter(not QuotaAlert.notified)
         return q.order_by(QuotaAlert.created_at.desc()).limit(limit).all()
 
     @staticmethod

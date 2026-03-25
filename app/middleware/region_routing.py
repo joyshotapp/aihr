@@ -12,7 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.services.region import get_region_config, DEFAULT_REGION, SUPPORTED_REGIONS
+from app.services.region import get_region_config, DEFAULT_REGION
 
 logger = logging.getLogger("unihr.middleware.region")
 

@@ -1359,7 +1359,7 @@ class DocumentParser:
                 raise ValueError("網頁內容為空")
 
             # 嘗試同時取得 metadata
-            metadata_extracted = trafilatura.extract(
+            trafilatura.extract(
                 downloaded,
                 output_format="xml",
                 include_tables=True,

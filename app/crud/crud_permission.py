@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.permission import Department, FeaturePermission
 from app.schemas.permission import (
     DepartmentCreate, DepartmentUpdate,
-    FeaturePermissionCreate, FeaturePermissionUpdate,
+    FeaturePermissionCreate,
 )
 
 
@@ -41,7 +41,7 @@ def get_departments_by_tenant(
 ) -> List[Department]:
     q = db.query(Department).filter(Department.tenant_id == tenant_id)
     if not include_inactive:
-        q = q.filter(Department.is_active == True)
+        q = q.filter(Department.is_active)
     return q.order_by(Department.name).all()
 
 

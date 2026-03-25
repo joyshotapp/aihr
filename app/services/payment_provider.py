@@ -6,7 +6,6 @@ Current implementation: NewebPay (藍新金流)
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass

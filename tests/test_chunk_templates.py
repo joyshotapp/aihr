@@ -8,12 +8,10 @@ chunk_templates 單元測試
   - TextChunker 整合（模板 + token 控制）
 """
 
-import pytest
 from app.services.chunk_templates import (
     detect_template,
     split_by_template,
     extract_section_metadata,
-    TEMPLATES,
 )
 
 

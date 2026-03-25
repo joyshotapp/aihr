@@ -7,7 +7,6 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.core import security
 from app.core.cookie_auth import extract_access_token
 from app.crud import crud_user
 from app.db.session import SessionLocal, apply_rls_context

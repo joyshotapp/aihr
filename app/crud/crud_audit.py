@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models.audit import AuditLog, UsageRecord
 import hashlib
-import json
 import logging
 
 logger = logging.getLogger(__name__)

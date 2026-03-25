@@ -30,7 +30,7 @@ async def _setup(client, superuser_headers, tax_id):
     })
     await create_user(client, superuser_headers, {
         "email": f"owner@{tid}.com", "password": "Owner123!",
-        "full_name": f"Owner", "role": "owner",
+        "full_name": "Owner", "role": "owner",
         "tenant_id": t["id"],
     })
     h = await login_user(client, f"owner@{tid}.com", "Owner123!")
@@ -93,7 +93,7 @@ async def test_invite_and_list_users(client: AsyncClient, superuser_headers: dic
     assert r2.status_code == 200
     emails = {u["email"] for u in r2.json()}
     assert "emp@iu01.com" in emails
-    assert f"owner@iu01.com" in emails
+    assert "owner@iu01.com" in emails
 
 
 @pytest.mark.asyncio

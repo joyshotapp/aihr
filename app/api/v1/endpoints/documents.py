@@ -1,6 +1,5 @@
 import os
 import asyncio
-import uuid
 import zipfile
 import io
 from typing import Any, Dict, List, Optional
@@ -159,7 +158,7 @@ async def upload_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"檔案未通過安全掃描: {exc.signature}",
         )
-    except FileScanError as exc:
+    except FileScanError:
         if settings.CLAMAV_FAIL_CLOSED:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
