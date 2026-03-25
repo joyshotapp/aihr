@@ -102,9 +102,7 @@ class AdminIPWhitelistMiddleware(BaseHTTPMiddleware):
         else:
             logger.info("Admin IP whitelist is DISABLED (development mode)")
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # Skip if disabled
         if not self.enabled:
             return await call_next(request)
@@ -120,9 +118,7 @@ class AdminIPWhitelistMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Blocked
-        logger.warning(
-            "Admin API access denied — IP=%s path=%s", client_ip, path
-        )
+        logger.warning("Admin API access denied — IP=%s path=%s", client_ip, path)
         return Response(
             content='{"detail":"Access denied: IP not in admin whitelist"}',
             status_code=403,

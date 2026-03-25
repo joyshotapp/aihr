@@ -17,7 +17,7 @@ def create(db: Session, *, obj_in: UserCreate) -> User:
         hashed_password=get_password_hash(obj_in.password),
         full_name=obj_in.full_name,
         tenant_id=obj_in.tenant_id,
-        role=obj_in.role if hasattr(obj_in, 'role') else "employee",
+        role=obj_in.role if hasattr(obj_in, "role") else "employee",
         status="active",
     )
     db.add(db_obj)
@@ -26,9 +26,7 @@ def create(db: Session, *, obj_in: UserCreate) -> User:
     return db_obj
 
 
-def authenticate(
-    db: Session, *, email: str, password: str
-) -> Optional[User]:
+def authenticate(db: Session, *, email: str, password: str) -> Optional[User]:
     user = get_by_email(db, email=email)
     if not user:
         return None

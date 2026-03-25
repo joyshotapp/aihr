@@ -4,6 +4,7 @@ Public Branding API (T4-3)
 Unauthenticated endpoint for login page to load tenant branding.
 Resolves tenant by custom domain or tenant_id query param.
 """
+
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, Request

@@ -112,9 +112,7 @@ async def hr_knowledge_search(
         score = r.get("score", 0)
         content = r.get("content", "")[:500]
         filename = r.get("filename", "未知")
-        parts.append(
-            f"### {i}. {filename}（相關度：{score:.2f}）\n{content}\n"
-        )
+        parts.append(f"### {i}. {filename}（相關度：{score:.2f}）\n{content}\n")
     return "\n".join(parts)
 
 

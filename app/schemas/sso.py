@@ -1,9 +1,11 @@
 """Schemas for SSO configuration and OAuth callback."""
+
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, Field
 
 # ─── Tenant SSO Config ───
+
 
 class SSOConfigBase(BaseModel):
     provider: str  # "google" | "microsoft"
@@ -37,6 +39,7 @@ class SSOConfigRead(SSOConfigBase):
 
 class SSOConfigPublic(BaseModel):
     """Safe projection — no secrets exposed to frontend."""
+
     provider: str
     enabled: bool
 
@@ -46,8 +49,10 @@ class SSOConfigPublic(BaseModel):
 
 # ─── OAuth callback ───
 
+
 class OAuthCallbackRequest(BaseModel):
     """Frontend sends the authorization code + redirect_uri."""
+
     code: str
     redirect_uri: str
     tenant_id: UUID
@@ -66,6 +71,7 @@ class SSOStateResponse(BaseModel):
 
 
 # ─── SSO Discovery (auto-detect tenant by email domain) ───
+
 
 class SSODiscoverRequest(BaseModel):
     email: str = Field(..., description="User's work email for domain-based tenant discovery")

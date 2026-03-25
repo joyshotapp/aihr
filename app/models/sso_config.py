@@ -1,6 +1,15 @@
 """Per-tenant SSO provider configuration."""
+
 import uuid
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    func,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
@@ -8,10 +17,9 @@ from app.db.base_class import Base
 
 class TenantSSOConfig(Base):
     """Each tenant can enable one or more SSO providers (google / microsoft)."""
+
     __tablename__ = "tenant_sso_configs"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "provider", name="uq_tenant_provider"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", "provider", name="uq_tenant_provider"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)

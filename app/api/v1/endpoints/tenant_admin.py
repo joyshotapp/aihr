@@ -2,6 +2,7 @@
 租戶自助管理後台 API（T3-2）
 各租戶 Owner/Admin 可自行管理公司設定、用戶、查看用量摘要
 """
+
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -28,6 +29,7 @@ router = APIRouter()
 # ═══════════════════════════════════════════
 #  Response Schemas
 # ═══════════════════════════════════════════
+
 
 class CompanyProfile(BaseModel):
     id: str
@@ -64,8 +66,8 @@ class UpdateUserRequest(BaseModel):
 import re as _re
 from pydantic import field_validator
 
-_HEX_COLOR_RE = _re.compile(r'^#[0-9a-fA-F]{6}$')
-_SAFE_URL_RE = _re.compile(r'^https?://')
+_HEX_COLOR_RE = _re.compile(r"^#[0-9a-fA-F]{6}$")
+_SAFE_URL_RE = _re.compile(r"^https?://")
 
 
 class BrandingSettings(BaseModel):
@@ -75,29 +77,30 @@ class BrandingSettings(BaseModel):
     brand_secondary_color: Optional[str] = None
     brand_favicon_url: Optional[str] = None
 
-    @field_validator('brand_primary_color', 'brand_secondary_color', mode='before')
+    @field_validator("brand_primary_color", "brand_secondary_color", mode="before")
     @classmethod
     def validate_hex_color(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         if not _HEX_COLOR_RE.match(v):
-            raise ValueError('色碼格式須為 #RRGGBB（如 #3b82f6）')
+            raise ValueError("色碼格式須為 #RRGGBB（如 #3b82f6）")
         return v
 
-    @field_validator('brand_logo_url', 'brand_favicon_url', mode='before')
+    @field_validator("brand_logo_url", "brand_favicon_url", mode="before")
     @classmethod
     def validate_url(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v == '':
+        if v is None or v == "":
             return None
         if not _SAFE_URL_RE.match(v):
-            raise ValueError('URL 須以 https:// 或 http:// 開頭')
+            raise ValueError("URL 須以 https:// 或 http:// 開頭")
         if len(v) > 500:
-            raise ValueError('URL 長度不可超過 500 字元')
+            raise ValueError("URL 長度不可超過 500 字元")
         return v
 
 
 class BrandingPublic(BaseModel):
     """Public branding info (no auth required — used by login page)."""
+
     brand_name: Optional[str] = None
     brand_logo_url: Optional[str] = None
     brand_primary_color: Optional[str] = None
@@ -159,14 +162,18 @@ def company_dashboard(
 
     # 月度使用量
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    monthly = db.query(
-        func.count(UsageRecord.id).label("queries"),
-        func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
-        func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
-    ).filter(
-        UsageRecord.tenant_id == tid,
-        UsageRecord.created_at >= month_start,
-    ).first()
+    monthly = (
+        db.query(
+            func.count(UsageRecord.id).label("queries"),
+            func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
+            func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
+        )
+        .filter(
+            UsageRecord.tenant_id == tid,
+            UsageRecord.created_at >= month_start,
+        )
+        .first()
+    )
 
     quota_data = crud_tenant.get_quota_status(db, tid)
     quota = QuotaStatus(**quota_data) if quota_data else None
@@ -203,13 +210,15 @@ def get_onboarding_status(
         .scalar()
         or 0
     ) > 0
-    branding_done = any([
-        tenant.brand_name,
-        tenant.brand_logo_url,
-        tenant.brand_primary_color,
-        tenant.brand_secondary_color,
-        tenant.brand_favicon_url,
-    ])
+    branding_done = any(
+        [
+            tenant.brand_name,
+            tenant.brand_logo_url,
+            tenant.brand_primary_color,
+            tenant.brand_secondary_color,
+            tenant.brand_favicon_url,
+        ]
+    )
 
     steps = [
         OnboardingStep(
@@ -264,6 +273,7 @@ def get_onboarding_status(
 #  Company Settings
 # ═══════════════════════════════════════════
 
+
 @router.get("/profile", response_model=CompanyProfile)
 def get_company_profile(
     db: Session = Depends(deps.get_db),
@@ -306,6 +316,7 @@ def get_company_quota(
 # ═══════════════════════════════════════════
 #  User Management (Self-service)
 # ═══════════════════════════════════════════
+
 
 @router.get("/users", response_model=List[CompanyUserInfo])
 def list_company_users(
@@ -360,16 +371,13 @@ def invite_user(
         if current_user.role != "owner":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="只有 Owner 可以指派 Owner 角色"
+                detail="只有 Owner 可以指派 Owner 角色",
             )
 
     # 檢查 email
     existing = crud_user.get_by_email(db, email=invite.email)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="此 Email 已被使用"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="此 Email 已被使用")
 
     # 產生邀請 token 並寄送 email
     from app.core.security import create_invite_token
@@ -458,6 +466,7 @@ def deactivate_company_user(
 #  Usage Summary (Self-service)
 # ═══════════════════════════════════════════
 
+
 @router.get("/usage/summary")
 def company_usage_summary(
     start_date: Optional[str] = None,
@@ -495,7 +504,10 @@ def company_usage_by_user(
             func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
             func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
         )
-        .outerjoin(UsageRecord, (UsageRecord.user_id == User.id) & (UsageRecord.created_at >= month_start))
+        .outerjoin(
+            UsageRecord,
+            (UsageRecord.user_id == User.id) & (UsageRecord.created_at >= month_start),
+        )
         .filter(User.tenant_id == tid)
         .group_by(User.id, User.email, User.full_name)
         .order_by(func.sum(UsageRecord.estimated_cost_usd).desc().nullslast())
@@ -517,6 +529,7 @@ def company_usage_by_user(
 # ═══════════════════════════════════════════
 #  White-Label Branding (T4-3)
 # ═══════════════════════════════════════════
+
 
 @router.get("/branding", response_model=BrandingSettings)
 def get_branding(
@@ -574,6 +587,7 @@ def update_branding(
 #  Quality Monitoring Dashboard (Phase 13)
 # ═══════════════════════════════════════════
 
+
 class DocumentQualitySummary(BaseModel):
     total_documents: int = 0
     completed: int = 0
@@ -609,11 +623,7 @@ def quality_dashboard(
     since = datetime.utcnow() - timedelta(days=days)
 
     # ── 1. Document Quality ──
-    docs = (
-        db.query(Document)
-        .filter(Document.tenant_id == tenant_id, Document.created_at >= since)
-        .all()
-    )
+    docs = db.query(Document).filter(Document.tenant_id == tenant_id, Document.created_at >= since).all()
 
     completed_docs = [d for d in docs if d.status == "completed"]
     failed_docs = [d for d in docs if d.status == "failed"]
@@ -635,13 +645,15 @@ def quality_dashboard(
                 quality_dist["fair"] += 1
             else:
                 quality_dist["poor"] += 1
-                low_quality_list.append({
-                    "id": str(d.id),
-                    "filename": d.filename,
-                    "quality_score": round(score, 3),
-                    "quality_level": qr.get("quality_level", "unknown"),
-                    "warnings": qr.get("warnings", []),
-                })
+                low_quality_list.append(
+                    {
+                        "id": str(d.id),
+                        "filename": d.filename,
+                        "quality_score": round(score, 3),
+                        "quality_level": qr.get("quality_level", "unknown"),
+                        "warnings": qr.get("warnings", []),
+                    }
+                )
 
     avg_quality = round(sum(quality_scores) / len(quality_scores), 3) if quality_scores else None
     low_quality_list.sort(key=lambda x: x["quality_score"])

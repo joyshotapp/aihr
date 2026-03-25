@@ -23,7 +23,9 @@ from app.config import settings
 from app.db.session import create_session
 from app.models.document import DocumentChunk, Document
 from app.services.circuit_breaker import (
-    voyage_breaker, pinecone_breaker, CircuitOpenError,
+    voyage_breaker,
+    pinecone_breaker,
+    CircuitOpenError,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,36 +33,42 @@ logger = logging.getLogger(__name__)
 # ── 可選依賴 ──
 try:
     import redis as redis_lib
+
     _HAS_REDIS = True
 except ImportError:
     _HAS_REDIS = False
 
 try:
     from rank_bm25 import BM25Okapi
+
     _HAS_BM25 = True
 except ImportError:
     _HAS_BM25 = False
 
 try:
     import jieba
+
     _HAS_JIEBA = True
 except ImportError:
     _HAS_JIEBA = False
 
 try:
     import openai as openai_lib
+
     _HAS_OPENAI = True
 except ImportError:
     _HAS_OPENAI = False
 
 try:
     from pinecone import Pinecone as PineconeClient
+
     _HAS_PINECONE = True
 except ImportError:
     _HAS_PINECONE = False
 
 # ── 模組級 BM25 索引快取（跨請求復用，避免每次查詢全量載入）──
 import time as _time
+
 _BM25_CACHE: Dict[str, Dict[str, Any]] = {}  # tenant_id → {bm25, chunks, doc_map, built_at}
 _BM25_CACHE_TTL = 300  # 5 分鐘 TTL（安全網）
 
@@ -114,6 +122,7 @@ class KnowledgeBaseRetriever:
                 self._pinecone_index = pc.Index(settings.PINECONE_INDEX_NAME)
             except Exception as e:
                 logger.warning(f"Pinecone 初始化失敗: {e}")
+
     # ─────────────────────────────────────────────
     # 公開 API
     # ─────────────────────────────────────────────
@@ -171,7 +180,10 @@ class KnowledgeBaseRetriever:
         else:  # semantic
             search_query = expanded_query or query
             results = self._semantic_search(
-                tenant_id, search_query, top_k=top_k * 2, filter_dict=filter_dict,
+                tenant_id,
+                search_query,
+                top_k=top_k * 2,
+                filter_dict=filter_dict,
             )
 
         # 3. 閾值過濾
@@ -220,11 +232,7 @@ class KnowledgeBaseRetriever:
         # Fallback: PostgreSQL chunk count
         db = create_session(tenant_id=tenant_id)
         try:
-            total_chunks = (
-                db.query(DocumentChunk)
-                .filter(DocumentChunk.tenant_id == tenant_id)
-                .count()
-            )
+            total_chunks = db.query(DocumentChunk).filter(DocumentChunk.tenant_id == tenant_id).count()
             return {
                 "exists": total_chunks > 0,
                 "vector_count": 0,
@@ -253,12 +261,15 @@ class KnowledgeBaseRetriever:
             # 1. 取得查詢向量
             embed_result = voyage_breaker.call(
                 self.voyage_client.embed,
-                [query], model=settings.VOYAGE_MODEL, input_type="query",
+                [query],
+                model=settings.VOYAGE_MODEL,
+                input_type="query",
             )
             query_embedding = embed_result.embeddings[0]
 
             # ── Langfuse: 記錄 Voyage query embedding token 數 ──
             from app.services.langfuse_client import get_langfuse
+
             lf = get_langfuse()
             if lf:
                 total_tokens = getattr(embed_result, "total_tokens", None) or 0
@@ -293,16 +304,18 @@ class KnowledgeBaseRetriever:
                 results = []
                 for match in response.matches:
                     meta = match.metadata or {}
-                    results.append({
-                        "id": match.id,
-                        "score": round(float(match.score), 4),
-                        "content": meta.get("text", ""),
-                        "document_id": meta.get("document_id", ""),
-                        "filename": meta.get("filename", ""),
-                        "chunk_index": int(meta.get("chunk_index", 0)),
-                        "metadata": meta,
-                        "source": "semantic",
-                    })
+                    results.append(
+                        {
+                            "id": match.id,
+                            "score": round(float(match.score), 4),
+                            "content": meta.get("text", ""),
+                            "document_id": meta.get("document_id", ""),
+                            "filename": meta.get("filename", ""),
+                            "chunk_index": int(meta.get("chunk_index", 0)),
+                            "metadata": meta,
+                            "source": "semantic",
+                        }
+                    )
                 return results
             except CircuitOpenError:
                 logger.warning("Pinecone 斷路器開啟，降級至 pgvector 語意檢索")
@@ -313,7 +326,10 @@ class KnowledgeBaseRetriever:
 
         # 3. Fallback: pgvector cosine similarity
         return self._pgvector_semantic_search(
-            tenant_id, query_embedding, top_k, filter_dict,
+            tenant_id,
+            query_embedding,
+            top_k,
+            filter_dict,
         )
 
     def _pgvector_semantic_search(
@@ -329,56 +345,50 @@ class KnowledgeBaseRetriever:
             # cosine_distance 回傳 0~2，轉換為 similarity = 1 - distance
             distance_col = DocumentChunk.embedding.cosine_distance(query_embedding)
 
-            query_obj = (
-                db.query(DocumentChunk, distance_col.label("distance"))
-                .filter(
-                    DocumentChunk.tenant_id == tenant_id,
-                    DocumentChunk.embedding.isnot(None),
-                )
+            query_obj = db.query(DocumentChunk, distance_col.label("distance")).filter(
+                DocumentChunk.tenant_id == tenant_id,
+                DocumentChunk.embedding.isnot(None),
             )
 
             if filter_dict:
                 if "document_id" in filter_dict:
                     val = filter_dict["document_id"]
                     if isinstance(val, list):
-                        query_obj = query_obj.filter(
-                            DocumentChunk.document_id.in_([UUID(str(v)) for v in val])
-                        )
+                        query_obj = query_obj.filter(DocumentChunk.document_id.in_([UUID(str(v)) for v in val]))
                     else:
-                        query_obj = query_obj.filter(
-                            DocumentChunk.document_id == UUID(str(val))
-                        )
+                        query_obj = query_obj.filter(DocumentChunk.document_id == UUID(str(val)))
 
-            rows = (
-                query_obj
-                .order_by(distance_col.asc())
-                .limit(top_k)
-                .all()
-            )
+            rows = query_obj.order_by(distance_col.asc()).limit(top_k).all()
 
             # 取得文件名映射
             doc_ids = list({row[0].document_id for row in rows})
             doc_map: Dict = {}
             if doc_ids:
-                docs = db.query(Document).filter(
-                    Document.id.in_(doc_ids),
-                    Document.tenant_id == tenant_id,
-                ).all()
+                docs = (
+                    db.query(Document)
+                    .filter(
+                        Document.id.in_(doc_ids),
+                        Document.tenant_id == tenant_id,
+                    )
+                    .all()
+                )
                 doc_map = {d.id: d.filename for d in docs}
 
             results = []
             for chunk, distance in rows:
                 similarity = max(0.0, 1.0 - float(distance))
-                results.append({
-                    "id": str(chunk.id),
-                    "score": round(similarity, 4),
-                    "content": chunk.text or "",
-                    "document_id": str(chunk.document_id),
-                    "filename": doc_map.get(chunk.document_id, ""),
-                    "chunk_index": chunk.chunk_index,
-                    "metadata": chunk.metadata_json or {},
-                    "source": "semantic_pgvector",
-                })
+                results.append(
+                    {
+                        "id": str(chunk.id),
+                        "score": round(similarity, 4),
+                        "content": chunk.text or "",
+                        "document_id": str(chunk.document_id),
+                        "filename": doc_map.get(chunk.document_id, ""),
+                        "chunk_index": chunk.chunk_index,
+                        "metadata": chunk.metadata_json or {},
+                        "source": "semantic_pgvector",
+                    }
+                )
 
             logger.info("pgvector 語意檢索完成: %d 筆結果", len(results))
             return results
@@ -416,19 +426,19 @@ class KnowledgeBaseRetriever:
                 # 重建 BM25 索引
                 db = create_session(tenant_id=tenant_id)
                 try:
-                    chunks = (
-                        db.query(DocumentChunk)
-                        .filter(DocumentChunk.tenant_id == tenant_id)
-                        .all()
-                    )
+                    chunks = db.query(DocumentChunk).filter(DocumentChunk.tenant_id == tenant_id).all()
                     if not chunks:
                         return []
 
                     doc_ids = list({c.document_id for c in chunks})
-                    docs = db.query(Document).filter(
-                        Document.id.in_(doc_ids),
-                        Document.tenant_id == tenant_id,
-                    ).all()
+                    docs = (
+                        db.query(Document)
+                        .filter(
+                            Document.id.in_(doc_ids),
+                            Document.tenant_id == tenant_id,
+                        )
+                        .all()
+                    )
                     doc_map = {d.id: d.filename for d in docs}
                 finally:
                     db.close()
@@ -447,9 +457,7 @@ class KnowledgeBaseRetriever:
             query_tokens = self._tokenize(query)
             scores = bm25.get_scores(query_tokens)
 
-            ranked = sorted(
-                enumerate(scores), key=lambda x: x[1], reverse=True
-            )[:top_k]
+            ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_k]
 
             results = []
             max_score = max(scores) if max(scores) > 0 else 1.0
@@ -457,16 +465,18 @@ class KnowledgeBaseRetriever:
                 if score <= 0:
                     continue
                 chunk = chunks[idx]
-                results.append({
-                    "id": str(chunk.id),
-                    "score": round(score / max_score, 4),
-                    "content": chunk.text or "",
-                    "document_id": str(chunk.document_id),
-                    "filename": doc_map.get(chunk.document_id, ""),
-                    "chunk_index": chunk.chunk_index,
-                    "metadata": {},
-                    "source": "keyword",
-                })
+                results.append(
+                    {
+                        "id": str(chunk.id),
+                        "score": round(score / max_score, 4),
+                        "content": chunk.text or "",
+                        "document_id": str(chunk.document_id),
+                        "filename": doc_map.get(chunk.document_id, ""),
+                        "chunk_index": chunk.chunk_index,
+                        "metadata": {},
+                        "source": "keyword",
+                    }
+                )
             return results
         except Exception as e:
             logger.error(f"BM25 關鍵字檢索錯誤: {e}")
@@ -518,9 +528,7 @@ class KnowledgeBaseRetriever:
 
         RRF 公式: score = Σ 1 / (k + rank)
         """
-        semantic_results = self._semantic_search(
-            tenant_id, semantic_query, top_k=top_k, filter_dict=filter_dict
-        )
+        semantic_results = self._semantic_search(tenant_id, semantic_query, top_k=top_k, filter_dict=filter_dict)
         keyword_results = self._keyword_search(tenant_id, keyword_query, top_k=top_k)
 
         # 如果只有一種來源有結果，直接返回
@@ -600,6 +608,7 @@ class KnowledgeBaseRetriever:
 
             # ── Langfuse: 記錄 rerank token 數 ──
             from app.services.langfuse_client import get_langfuse
+
             lf = get_langfuse()
             if lf:
                 total_tokens = getattr(reranked, "total_tokens", None) or 0
@@ -607,7 +616,11 @@ class KnowledgeBaseRetriever:
                     name="voyage_rerank",
                     model="rerank-2",
                     input=query[:200],
-                    metadata={"num_documents": len(documents), "top_k": top_k, "total_tokens": total_tokens},
+                    metadata={
+                        "num_documents": len(documents),
+                        "top_k": top_k,
+                        "total_tokens": total_tokens,
+                    },
                     usage={"total_tokens": total_tokens} if total_tokens else None,
                 )
 
@@ -623,9 +636,7 @@ class KnowledgeBaseRetriever:
 
     _CACHE_TTL = 300  # 5 分鐘
 
-    def _cache_key(
-        self, tenant_id: UUID, query: str, mode: str, top_k: int, min_score: float
-    ) -> str:
+    def _cache_key(self, tenant_id: UUID, query: str, mode: str, top_k: int, min_score: float) -> str:
         raw = f"{tenant_id}:{query}:{mode}:{top_k}:{min_score}"
         h = hashlib.sha256(raw.encode()).hexdigest()[:16]
         return f"kb:search:{tenant_id}:{h}"

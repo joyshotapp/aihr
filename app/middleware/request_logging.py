@@ -35,7 +35,9 @@ def _extract_user_context(request: Request) -> tuple[str, str]:
         if auth.startswith("Bearer "):
             token = auth[7:]
             payload = jwt.decode(
-                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
+                token,
+                settings.SECRET_KEY,
+                algorithms=[settings.ALGORITHM],
                 options={"verify_exp": False},
             )
             return str(payload.get("tenant_id", "-")), str(payload.get("sub", "-"))
@@ -75,6 +77,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         logger.info(
             "← %s %s — %d — %.1fms",
-            method, path, response.status_code, elapsed,
+            method,
+            path,
+            response.status_code,
+            elapsed,
         )
         return response

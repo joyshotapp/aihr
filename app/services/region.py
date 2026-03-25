@@ -19,9 +19,9 @@ from typing import Dict
 class RegionConfig:
     """單一區域的基礎設施配置"""
 
-    code: str                        # 區域代碼：ap, us, eu, jp
-    name: str                        # 顯示名稱
-    display_name_zh: str             # 中文名稱
+    code: str  # 區域代碼：ap, us, eu, jp
+    name: str  # 顯示名稱
+    display_name_zh: str  # 中文名稱
 
     # 資料庫
     db_host: str = "db"
@@ -39,8 +39,8 @@ class RegionConfig:
     celery_broker_url: str = ""
 
     # 合規
-    data_residency: str = ""         # 資料落地說明
-    compliance_notes: str = ""       # 法規遵循備註
+    data_residency: str = ""  # 資料落地說明
+    compliance_notes: str = ""  # 法規遵循備註
 
     # 服務端點
     api_endpoint: str = ""

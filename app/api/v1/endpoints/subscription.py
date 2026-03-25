@@ -7,6 +7,7 @@ Endpoints:
   - POST /upgrade          — Request plan upgrade
   - GET  /usage/export     — Export usage data (Pro+ feature)
 """
+
 import csv
 import io
 import logging
@@ -36,6 +37,7 @@ logger = logging.getLogger("unihr.subscription")
 
 
 # ── Schemas ──
+
 
 class PlanFeatures(BaseModel):
     ai_chat: bool = False
@@ -89,25 +91,28 @@ class UpgradeResult(BaseModel):
 
 # ── Endpoints ──
 
+
 @router.get("/plans", response_model=List[PlanInfo])
 def list_plans() -> Any:
     """公開：列出所有訂閱方案"""
     plans = []
     for name, config in PLAN_MATRIX.items():
-        plans.append(PlanInfo(
-            name=name,
-            display_name=config["display_name"],
-            price_monthly_usd=config["price_monthly_usd"],
-            price_yearly_usd=config["price_yearly_usd"],
-            price_monthly_twd=config["price_monthly_twd"],
-            price_yearly_twd=config["price_yearly_twd"],
-            max_users=config["max_users"],
-            max_documents=config["max_documents"],
-            max_storage_mb=config["max_storage_mb"],
-            monthly_query_limit=config["monthly_query_limit"],
-            monthly_token_limit=config["monthly_token_limit"],
-            features=PlanFeatures(**config["features"]),
-        ))
+        plans.append(
+            PlanInfo(
+                name=name,
+                display_name=config["display_name"],
+                price_monthly_usd=config["price_monthly_usd"],
+                price_yearly_usd=config["price_yearly_usd"],
+                price_monthly_twd=config["price_monthly_twd"],
+                price_yearly_twd=config["price_yearly_twd"],
+                max_users=config["max_users"],
+                max_documents=config["max_documents"],
+                max_storage_mb=config["max_storage_mb"],
+                monthly_query_limit=config["monthly_query_limit"],
+                monthly_token_limit=config["monthly_token_limit"],
+                features=PlanFeatures(**config["features"]),
+            )
+        )
     return plans
 
 
@@ -125,16 +130,21 @@ def current_plan(
 
     # Current month usage
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    monthly = db.query(
-        func.count(UsageRecord.id).label("queries"),
-        func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
-    ).filter(
-        UsageRecord.tenant_id == current_user.tenant_id,
-        UsageRecord.created_at >= month_start,
-    ).first()
+    monthly = (
+        db.query(
+            func.count(UsageRecord.id).label("queries"),
+            func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
+        )
+        .filter(
+            UsageRecord.tenant_id == current_user.tenant_id,
+            UsageRecord.created_at >= month_start,
+        )
+        .first()
+    )
 
     from app.models.user import User as UserModel
     from app.models.document import Document
+
     user_count = db.query(func.count(UserModel.id)).filter(UserModel.tenant_id == current_user.tenant_id).scalar() or 0
     doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == current_user.tenant_id).scalar() or 0
 
@@ -226,7 +236,10 @@ def request_upgrade(
     db.commit()
     logger.info(
         "Tenant %s upgraded: %s → %s (by user %s)",
-        tenant.id, old_plan, body.target_plan, current_user.id,
+        tenant.id,
+        old_plan,
+        body.target_plan,
+        current_user.id,
     )
 
     return UpgradeResult(
@@ -304,14 +317,16 @@ def export_usage(
     writer = csv.writer(output)
     writer.writerow(["ID", "Action", "Input Tokens", "Output Tokens", "Cost (USD)", "Created At"])
     for r in records:
-        writer.writerow([
-            str(r.id),
-            r.action,
-            r.input_tokens or 0,
-            r.output_tokens or 0,
-            float(r.estimated_cost_usd) if r.estimated_cost_usd else 0,
-            str(r.created_at),
-        ])
+        writer.writerow(
+            [
+                str(r.id),
+                r.action,
+                r.input_tokens or 0,
+                r.output_tokens or 0,
+                float(r.estimated_cost_usd) if r.estimated_cost_usd else 0,
+                str(r.created_at),
+            ]
+        )
 
     output.seek(0)
     return StreamingResponse(

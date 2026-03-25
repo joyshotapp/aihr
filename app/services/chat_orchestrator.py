@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # ── 可選依賴 ──
 try:
     import openai as openai_lib
+
     _HAS_OPENAI = True
 except ImportError:
     _HAS_OPENAI = False
@@ -56,7 +57,7 @@ class ChatOrchestrator:
 1. ...
 2. ...
 3. ..."""
-    
+
     def __init__(self):
         self.kb_retriever = KnowledgeBaseRetriever()
         self.core_client = CoreAPIClient()
@@ -137,7 +138,7 @@ class ChatOrchestrator:
     ) -> Dict[str, Any]:
         """
         純檢索：並行查詢公司內規 + 勞資法 Core API，回傳結構化上下文。
-        
+
         分離自原 process_query，使串流端點可先取得來源，再分段生成。
         """
         request_id = str(uuid.uuid4())
@@ -212,9 +213,7 @@ class ChatOrchestrator:
             request_id=request_id,
         )
 
-    def _policy_boost_search(
-        self, tenant_id: UUID, question: str, top_k: int
-    ) -> List[Dict[str, Any]]:
+    def _policy_boost_search(self, tenant_id: UUID, question: str, top_k: int) -> List[Dict[str, Any]]:
         keywords = self._policy_hint_keywords(question)
         if not keywords:
             return []
@@ -248,8 +247,20 @@ class ChatOrchestrator:
             hints.append("新人到職 試用期")
         if "喪假" in question:
             hints.append("喪假 父母 配偶 祖父母 天數")
-        if any(k in question for k in ["特休", "婚假", "生理假", "產假",
-                                        "陪產", "請假", "年假", "特別休假", "假期"]):
+        if any(
+            k in question
+            for k in [
+                "特休",
+                "婚假",
+                "生理假",
+                "產假",
+                "陪產",
+                "請假",
+                "年假",
+                "特別休假",
+                "假期",
+            ]
+        ):
             hints.append("請假規定 特休假")
         if any(k in question for k in ["年終獎金", "獎懲", "獎金"]):
             hints.append("獎懲管理 年終獎金")
@@ -291,13 +302,8 @@ class ChatOrchestrator:
         request_id: str,
     ) -> Dict[str, Any]:
         """將 raw 檢索結果組裝為結構化 context dict。"""
-        has_policy = (
-            company_policy.get("status") == "success"
-            and len(company_policy.get("results", [])) > 0
-        )
-        has_labor_law = (
-            labor_law.get("status") != "error" and labor_law.get("answer")
-        )
+        has_policy = company_policy.get("status") == "success" and len(company_policy.get("results", [])) > 0
+        has_labor_law = labor_law.get("status") != "error" and labor_law.get("answer")
         arbitration = self._decide_source_arbitration(
             question=question,
             has_policy=has_policy,
@@ -340,19 +346,19 @@ class ChatOrchestrator:
                 ],
             }
             for r in top_policies:
-                context["sources"].append({
-                    "type": "policy",
-                    "title": r.get("filename") or "",
-                    "snippet": (r.get("content") or "")[:200],
-                    "score": r.get("score") or 0,
-                })
+                context["sources"].append(
+                    {
+                        "type": "policy",
+                        "title": r.get("filename") or "",
+                        "snippet": (r.get("content") or "")[:200],
+                        "score": r.get("score") or 0,
+                    }
+                )
             for i, r in enumerate(top_policies, 1):
                 content = r.get("content") or ""
                 filename = r.get("filename") or ""
                 score = r.get("score") or 0
-                policy_context_parts.append(
-                    f"【公司內規 #{i}】（來源：{filename}，相關度：{score:.2f}）\n{content}"
-                )
+                policy_context_parts.append(f"【公司內規 #{i}】（來源：{filename}，相關度：{score:.2f}）\n{content}")
 
         if has_labor_law:
             context["labor_law_raw"] = {
@@ -366,19 +372,23 @@ class ChatOrchestrator:
                     article = citation.get("article") or ""
                     # 格式化為 《勞動基準法》第17條 形式
                     if article:
-                        title = f"《{law_name}》第{article}" if not article.startswith("第") else f"《{law_name}》{article}"
+                        title = (
+                            f"《{law_name}》第{article}" if not article.startswith("第") else f"《{law_name}》{article}"
+                        )
                     else:
                         title = f"《{law_name}》"
-                    context["sources"].append({
-                        "type": "law",
-                        "title": title,
-                        "snippet": labor_law.get("answer", "")[:200],
-                    })
+                    context["sources"].append(
+                        {
+                            "type": "law",
+                            "title": title,
+                            "snippet": labor_law.get("answer", "")[:200],
+                        }
+                    )
             else:
                 # Core API 不回傳結構化 citations，從回答文字中解析法條引用
                 answer_text = labor_law.get("answer") or ""
                 if answer_text:
-                    law_refs = re.findall(r'《(.+?)》(?:第(\d+[-之]?\d*條?))?', answer_text)
+                    law_refs = re.findall(r"《(.+?)》(?:第(\d+[-之]?\d*條?))?", answer_text)
                     if law_refs:
                         seen = set()
                         for law_name, article in law_refs[:5]:
@@ -386,27 +396,30 @@ class ChatOrchestrator:
                             title = f"《{law_name}》第{article}" if article else f"《{law_name}》"
                             if title not in seen:
                                 seen.add(title)
-                                context["sources"].append({
-                                    "type": "law",
-                                    "title": title,
-                                    "snippet": answer_text[:200],
-                                })
+                                context["sources"].append(
+                                    {
+                                        "type": "law",
+                                        "title": title,
+                                        "snippet": answer_text[:200],
+                                    }
+                                )
                     else:
-                        context["sources"].append({
-                            "type": "law",
-                            "title": "勞動法規 (Core API)",
-                            "snippet": answer_text[:200],
-                        })
+                        context["sources"].append(
+                            {
+                                "type": "law",
+                                "title": "勞動法規 (Core API)",
+                                "snippet": answer_text[:200],
+                            }
+                        )
             law_text = labor_law.get("answer", "")
             citations_text = ""
             if labor_law.get("citations"):
                 citations_text = "；".join(
-                    f"{c.get('law_name', '')} {c.get('article', '')}"
-                    for c in labor_law["citations"]
+                    f"{c.get('law_name', '')} {c.get('article', '')}" for c in labor_law["citations"]
                 )
             elif law_text:
                 # Core API 不回傳結構化 citations，從 answer 文字解析法條做為 heading
-                parsed = re.findall(r'《(.+?)》(?:第([\d\-之]+條(?:之\d+)?))?', law_text)
+                parsed = re.findall(r"《(.+?)》(?:第([\d\-之]+條(?:之\d+)?))?", law_text)
                 seen_cit: set = set()
                 unique_cit: list = []
                 for law_n, art_n in parsed[:8]:
@@ -416,9 +429,7 @@ class ChatOrchestrator:
                         unique_cit.append(key)
                 if unique_cit:
                     citations_text = "（法源：" + "、".join(unique_cit) + "）"
-            law_context_parts.append(
-                f"【勞動法規】{citations_text}\n{law_text}"
-            )
+            law_context_parts.append(f"【勞動法規】{citations_text}\n{law_text}")
 
         if arbitration["primary_source"] == "law":
             context["context_parts"].extend(law_context_parts + policy_context_parts)
@@ -523,9 +534,7 @@ class ChatOrchestrator:
             yield self._fallback_answer(context)
             return
 
-        messages = self._build_llm_messages(
-            question, context, history=history, include_followup=include_followup
-        )
+        messages = self._build_llm_messages(question, context, history=history, include_followup=include_followup)
 
         try:
             if self._llm_backend == "gemini" and self._openai_async:
@@ -554,7 +563,10 @@ class ChatOrchestrator:
                             direction="output",
                         )
                         if output_sensitive:
-                            logger.warning("Sensitive output blocked in stream response: %s", output_sensitive)
+                            logger.warning(
+                                "Sensitive output blocked in stream response: %s",
+                                output_sensitive,
+                            )
                             yield "回覆內容含敏感資訊，已由安全機制中止輸出。"
                             return
                         yield delta.content
@@ -566,7 +578,10 @@ class ChatOrchestrator:
                 )
                 output_sensitive = self._sensitive_content_reason(answer, direction="output")
                 if output_sensitive:
-                    logger.warning("Sensitive output blocked in non-stream path: %s", output_sensitive)
+                    logger.warning(
+                        "Sensitive output blocked in non-stream path: %s",
+                        output_sensitive,
+                    )
                     yield "回覆內容含敏感資訊，已由安全機制中止輸出。"
                     return
                 yield answer
@@ -577,15 +592,59 @@ class ChatOrchestrator:
     # ──────────── T7-2: 多輪對話支援 ────────────
 
     # 需要上下文補全的代名詞／指示詞
-    _CONTEXT_PRONOUNS = ("他", "她", "它", "他的", "她的", "他們", "她們",
-                         "這個人", "那個人", "此人", "該員工", "同一", "上述", "前述")
+    _CONTEXT_PRONOUNS = (
+        "他",
+        "她",
+        "它",
+        "他的",
+        "她的",
+        "他們",
+        "她們",
+        "這個人",
+        "那個人",
+        "此人",
+        "該員工",
+        "同一",
+        "上述",
+        "前述",
+    )
     _LEGAL_SENSITIVE_KEYWORDS = (
-        "勞基法", "法條", "違法", "合法", "罰則", "工資", "加班", "資遣", "解僱", "解雇",
-        "特休", "請假", "工時", "最低", "法定", "勞保", "健保", "職災", "職業災害",
+        "勞基法",
+        "法條",
+        "違法",
+        "合法",
+        "罰則",
+        "工資",
+        "加班",
+        "資遣",
+        "解僱",
+        "解雇",
+        "特休",
+        "請假",
+        "工時",
+        "最低",
+        "法定",
+        "勞保",
+        "健保",
+        "職災",
+        "職業災害",
     )
     _POLICY_SENSITIVE_KEYWORDS = (
-        "公司規定", "內規", "流程", "sop", "報帳", "報到", "簽核", "核銷", "表單", "制度",
-        "員工手冊", "部門", "津貼", "獎懲", "考核",
+        "公司規定",
+        "內規",
+        "流程",
+        "sop",
+        "報帳",
+        "報到",
+        "簽核",
+        "核銷",
+        "表單",
+        "制度",
+        "員工手冊",
+        "部門",
+        "津貼",
+        "獎懲",
+        "考核",
     )
     _PROMPT_INJECTION_PATTERNS = (
         r"ignore\s+(all\s+)?(previous|above)\s+instructions",
@@ -658,9 +717,7 @@ class ChatOrchestrator:
         compiled_patterns = list(self._PROMPT_INJECTION_PATTERNS)
         extra_patterns = getattr(settings, "LLM_GUARDRAIL_BLOCK_PATTERNS", "")
         if extra_patterns:
-            compiled_patterns.extend(
-                p.strip() for p in extra_patterns.split(",") if p.strip()
-            )
+            compiled_patterns.extend(p.strip() for p in extra_patterns.split(",") if p.strip())
 
         for pattern in compiled_patterns:
             try:
@@ -699,9 +756,7 @@ class ChatOrchestrator:
             )
         return None
 
-    async def contextualize_query(
-        self, query: str, history: List[Dict[str, str]]
-    ) -> str:
+    async def contextualize_query(self, query: str, history: List[Dict[str, str]]) -> str:
         """
         用 LLM 將含代名詞/省略主詞的查詢改寫為獨立查詢。
         若歷史為空、LLM 不可用、或問題不含指代詞，直接回傳原 query。
@@ -748,7 +803,7 @@ class ChatOrchestrator:
     ) -> Dict[str, Any]:
         """
         處理用戶查詢（非串流，向下相容）。
-        
+
         新增 conversation_id / history 參數以支援多輪對話。
         """
         block_reason = self._guardrail_block_reason(question)
@@ -846,11 +901,12 @@ class ChatOrchestrator:
                     self._generate_answer(question, ctx, history=history),
                     timeout=generation_timeout,
                 )
-                output_sensitive = self._sensitive_content_reason(
-                    result["answer"], direction="output"
-                )
+                output_sensitive = self._sensitive_content_reason(result["answer"], direction="output")
                 if output_sensitive:
-                    logger.warning("Sensitive output blocked in process_query: %s", output_sensitive)
+                    logger.warning(
+                        "Sensitive output blocked in process_query: %s",
+                        output_sensitive,
+                    )
                     result["answer"] = "回覆內容含敏感資訊，已由安全機制中止輸出。"
                     result["notes"].append("Sensitive IO filter 已攔截輸出")
                 else:
@@ -885,9 +941,7 @@ class ChatOrchestrator:
         if include_followup:
             system_content += self.FOLLOWUP_PROMPT
 
-        messages: List[Dict[str, str]] = [
-            {"role": "system", "content": system_content}
-        ]
+        messages: List[Dict[str, str]] = [{"role": "system", "content": system_content}]
 
         # 注入歷史（Token 預算管理）
         if history:
@@ -914,8 +968,7 @@ class ChatOrchestrator:
             conflict_rule = "若公司內規與法規衝突，優先採用公司內規，並標註法規風險。"
         else:
             conflict_rule = (
-                "若公司內規低於法定最低標準，必須以法規為準並明確指出差異；"
-                "若公司內規高於法定標準，採公司內規。"
+                "若公司內規低於法定最低標準，必須以法規為準並明確指出差異；若公司內規高於法定標準，採公司內規。"
             )
 
         arbitration_text = (
@@ -942,22 +995,18 @@ class ChatOrchestrator:
             user_suffix += f"\n\n{exact_calc}"
         # 明確列出已找到的法條，要求 LLM 逐一引用
         law_sources = [
-            s["title"] for s in context.get("sources", [])
+            s["title"]
+            for s in context.get("sources", [])
             if s.get("type") == "law" and "Core API" not in s.get("title", "")
         ]
         if law_sources:
             user_suffix += (
-                f"\n\n⚠️ 以下法條已在參考資料中明確標示，請務必在回答中引用（不得省略）："
-                f"{'、'.join(law_sources)}"
+                f"\n\n⚠️ 以下法條已在參考資料中明確標示，請務必在回答中引用（不得省略）：{'、'.join(law_sources)}"
             )
 
         max_input_tokens = int(getattr(settings, "LLM_MAX_INPUT_TOKENS", 6000))
         reserve_tokens = int(getattr(settings, "LLM_CONTEXT_RESERVE_TOKENS", 1800))
-        base_tokens = (
-            history_tokens
-            + self._estimate_tokens(user_prefix)
-            + self._estimate_tokens(user_suffix)
-        )
+        base_tokens = history_tokens + self._estimate_tokens(user_prefix) + self._estimate_tokens(user_suffix)
         context_budget = max(200, max_input_tokens - reserve_tokens - base_tokens)
         context_text, context_truncated = self._apply_context_budget(
             context.get("context_parts", []),
@@ -994,7 +1043,9 @@ class ChatOrchestrator:
         hints: List[str] = []
         if "特休" in question or "特別休假" in question:
             hints.append("特休天數依勞基法第38條，按『實際到職日』計算年資，而非問題敘述中的概算。")
-            hints.append("年資區間：未滿6個月=0天，6個月以上未滿1年=3天，1年=7天，2年=10天，3年=14天，5年=15天，10年以上每年+1天(最多30天)。")
+            hints.append(
+                "年資區間：未滿6個月=0天，6個月以上未滿1年=3天，1年=7天，2年=10天，3年=14天，5年=15天，10年以上每年+1天(最多30天)。"
+            )
             hints.append(f"若問題含有具體到職日期，請計算到今天（{today_str}）的正確年資後再查對照表。")
         if "資遣費" in question:
             hints.append("資遣費公式：年資(年) × 0.5 × 月平均工資。不要把月薪除以30。")
@@ -1002,8 +1053,12 @@ class ChatOrchestrator:
         if "加班" in question:
             hints.append("時薪計算：時薪 = 月薪 / 30 / 8（勞基法基準）。")
             hints.append("平日加班費：前 2 小時每小時 × 1.34 倍，第 3 小時起每小時 × 1.67 倍。")
-            hints.append("休息日加班費：前 2 小時每小時 × 1.34 倍，第 3-8 小時每小時 × 1.67 倍，第 9 小時起 × 2.67 倍。")
-            hints.append("計算時必須分段計算，不可把全部時數都乘同一倍率。例如：平日加班 4 小時 = 前 2 小時 × 1.34 + 後 2 小時 × 1.67。")
+            hints.append(
+                "休息日加班費：前 2 小時每小時 × 1.34 倍，第 3-8 小時每小時 × 1.67 倍，第 9 小時起 × 2.67 倍。"
+            )
+            hints.append(
+                "計算時必須分段計算，不可把全部時數都乘同一倍率。例如：平日加班 4 小時 = 前 2 小時 × 1.34 + 後 2 小時 × 1.67。"
+            )
         if "平均" in question and ("薪" in question or "月薪" in question):
             hints.append("平均值需使用所有符合條件的資料列，不要只取前幾筆。")
         if "占比" in question or "比例" in question:
@@ -1011,7 +1066,9 @@ class ChatOrchestrator:
         if "年資最深" in question or ("最深" in question and "年資" in question):
             hints.append("最深年資需比對完整名冊後再下結論。")
         if "加班" in question and ("合法" in question or "合法嗎" in question):
-            hints.append("若題目只給單一倍數（如 1.5 倍），視為前 2 小時標準；可判定合法，但提醒超過 2 小時需 1.67 倍。")
+            hints.append(
+                "若題目只給單一倍數（如 1.5 倍），視為前 2 小時標準；可判定合法，但提醒超過 2 小時需 1.67 倍。"
+            )
         if "勞保" in question:
             hints.append("若薪資條已列出勞保自付金額，直接引用該數值。")
         if "颱風" in question or "停班停課" in question:

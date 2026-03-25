@@ -7,6 +7,7 @@ Allows tenant Owner/Admin to:
   3. Verify DNS (checks TXT record)
   4. List / delete custom domains
 """
+
 import hashlib
 import logging
 import re
@@ -27,12 +28,11 @@ from app.middleware.custom_domain import invalidate_domain_cache
 
 router = APIRouter()
 logger = logging.getLogger("unihr.custom_domain")
-DOMAIN_RE = re.compile(
-    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
-)
+DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 
 
 # ── Schemas ──
+
 
 class DomainCreate(BaseModel):
     domain: str
@@ -64,6 +64,7 @@ class DomainSSLProvisionResult(BaseModel):
 
 
 # ── Helpers ──
+
 
 def _generate_verification_token(tenant_id: str, domain: str) -> str:
     """Generate a deterministic verification token."""
@@ -109,15 +110,19 @@ def _queue_ssl_provisioning(db: Session, record: CustomDomain, tenant_id: str) -
 
 # ── Endpoints ──
 
+
 @router.get("/", response_model=List[DomainInfo])
 def list_domains(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(require_admin),
 ) -> Any:
     """列出本租戶的所有自訂域名"""
-    domains = db.query(CustomDomain).filter(
-        CustomDomain.tenant_id == current_user.tenant_id
-    ).order_by(CustomDomain.created_at.desc()).all()
+    domains = (
+        db.query(CustomDomain)
+        .filter(CustomDomain.tenant_id == current_user.tenant_id)
+        .order_by(CustomDomain.created_at.desc())
+        .all()
+    )
 
     return [_to_domain_info(d) for d in domains]
 
@@ -171,10 +176,14 @@ def verify_domain(
     current_user: User = Depends(require_admin),
 ) -> Any:
     """驗證域名 DNS TXT 記錄"""
-    record = db.query(CustomDomain).filter(
-        CustomDomain.id == domain_id,
-        CustomDomain.tenant_id == current_user.tenant_id,
-    ).first()
+    record = (
+        db.query(CustomDomain)
+        .filter(
+            CustomDomain.id == domain_id,
+            CustomDomain.tenant_id == current_user.tenant_id,
+        )
+        .first()
+    )
     if not record:
         raise HTTPException(status_code=404, detail="域名不存在")
 
@@ -191,6 +200,7 @@ def verify_domain(
     verified = False
     try:
         import dns.resolver
+
         answers = dns.resolver.resolve(f"_unihr-verify.{record.domain}", "TXT")
         for rdata in answers:
             txt_value = rdata.to_text().strip('"')
@@ -263,10 +273,14 @@ def provision_domain_ssl(
     current_user: User = Depends(require_admin),
 ) -> Any:
     """手動重新觸發 SSL 憑證申請。"""
-    record = db.query(CustomDomain).filter(
-        CustomDomain.id == domain_id,
-        CustomDomain.tenant_id == current_user.tenant_id,
-    ).first()
+    record = (
+        db.query(CustomDomain)
+        .filter(
+            CustomDomain.id == domain_id,
+            CustomDomain.tenant_id == current_user.tenant_id,
+        )
+        .first()
+    )
     if not record:
         raise HTTPException(status_code=404, detail="域名不存在")
 
@@ -319,10 +333,14 @@ def delete_domain(
 ) -> Any:
     """刪除自訂域名"""
 
-    record = db.query(CustomDomain).filter(
-        CustomDomain.id == domain_id,
-        CustomDomain.tenant_id == current_user.tenant_id,
-    ).first()
+    record = (
+        db.query(CustomDomain)
+        .filter(
+            CustomDomain.id == domain_id,
+            CustomDomain.tenant_id == current_user.tenant_id,
+        )
+        .first()
+    )
     if not record:
         raise HTTPException(status_code=404, detail="域名不存在")
 

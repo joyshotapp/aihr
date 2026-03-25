@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session
 from app.api import deps
 from app.core import security
 from app.db.session import SessionLocal
-from app.core.cookie_auth import set_auth_cookies, clear_auth_cookies, extract_refresh_token
+from app.core.cookie_auth import (
+    set_auth_cookies,
+    clear_auth_cookies,
+    extract_refresh_token,
+)
 from app.core.redis_client import get_redis_client
 from app.crud import crud_user, crud_tenant
 from app.schemas.token import Token
@@ -150,23 +154,21 @@ def login_access_token(
     _check_auth_rate_limit(f"login_ip:{client_ip}", max_attempts=20, window=60)
     _check_login_lockout(form_data.username)
 
-    user = crud_user.authenticate(
-        db, email=form_data.username, password=form_data.password
-    )
+    user = crud_user.authenticate(db, email=form_data.username, password=form_data.password)
     if not user:
         _record_login_failure(form_data.username)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect email or password"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect email or password",
         )
     elif not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     elif not user.email_verified:
         # Actually resend verification email
         try:
             _token = security.create_email_verification_token(user.email)
             from app.services.email_service import send_email_verification
+
             send_email_verification(user.email, user.full_name or "", _token)
         except Exception:
             pass
@@ -225,6 +227,7 @@ def verify_mfa_login(
 #  Refresh Token Rotation
 # ═══════════════════════════════════════════
 
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: Optional[str] = None
 
@@ -258,6 +261,7 @@ def refresh_access_token(
 
     # Check if refresh token has already been used (Redis)
     from app.core.redis_client import get_redis_client
+
     rc = get_redis_client()
     if rc:
         stored = rc.get(f"refresh:{jti}")
@@ -306,6 +310,7 @@ def logout(request: Request, response: Response) -> dict:
 # ═══════════════════════════════════════════
 #  公開自助註冊
 # ═══════════════════════════════════════════
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -370,9 +375,7 @@ def register(
         )
 
     # 1. Create tenant with Free plan
-    tenant = crud_tenant.create(
-        db, obj_in=TenantCreate(name=body.company_name.strip(), plan="free")
-    )
+    tenant = crud_tenant.create(db, obj_in=TenantCreate(name=body.company_name.strip(), plan="free"))
     tenant_id = tenant.id  # capture before potential rollback
 
     # 2. Create owner user
@@ -389,6 +392,7 @@ def register(
         db.rollback()
         # Clean up orphaned tenant (race condition: duplicate email slipped past check)
         from sqlalchemy import text
+
         db.execute(text("DELETE FROM tenants WHERE id = :tid"), {"tid": str(tenant_id)})
         db.commit()
         raise HTTPException(
@@ -405,6 +409,7 @@ def register(
     try:
         verify_token = security.create_email_verification_token(new_user.email)
         from app.services.email_service import send_email_verification
+
         send_email_verification(new_user.email, new_user.full_name or "", verify_token)
     except Exception:
         pass
@@ -468,6 +473,7 @@ def verify_email(
     # Send welcome email
     try:
         from app.services.email_service import send_welcome_email
+
         send_welcome_email(user.email, user.full_name or "")
     except Exception:
         pass
@@ -475,6 +481,7 @@ def verify_email(
     # Schedule onboarding drip
     try:
         from app.tasks.onboarding_tasks import schedule_onboarding_sequence
+
         schedule_onboarding_sequence(str(user.id), str(user.tenant_id))
     except Exception:
         pass
@@ -502,6 +509,7 @@ def resend_verification(
         try:
             token = security.create_email_verification_token(user.email)
             from app.services.email_service import send_email_verification
+
             send_email_verification(user.email, user.full_name or "", token)
         except Exception:
             pass
@@ -511,6 +519,7 @@ def resend_verification(
 # ═══════════════════════════════════════════
 #  忘記密碼 / 重設密碼
 # ═══════════════════════════════════════════
+
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
@@ -534,6 +543,7 @@ def forgot_password(
     if user and user.is_active:
         token = security.create_password_reset_token(user.email)
         from app.services.email_service import send_password_reset_email
+
         send_password_reset_email(user.email, token)
     # Always return 200 to prevent email enumeration
     return {"msg": "If the email exists, a reset link has been sent."}
@@ -570,6 +580,7 @@ def reset_password(
 # ═══════════════════════════════════════════
 #  Email 邀請 — 接受邀請
 # ═══════════════════════════════════════════
+
 
 class AcceptInviteRequest(BaseModel):
     token: str
@@ -634,6 +645,7 @@ def accept_invite(
     # Send welcome email (best-effort)
     try:
         from app.services.email_service import send_welcome_email
+
         send_welcome_email(new_user.email, new_user.full_name or "")
     except Exception:
         pass
@@ -641,6 +653,7 @@ def accept_invite(
     # Schedule onboarding drip sequence (Day 1 + Day 3)
     try:
         from app.tasks.onboarding_tasks import schedule_onboarding_sequence
+
         schedule_onboarding_sequence(str(new_user.id), tenant_id)
     except Exception:
         pass

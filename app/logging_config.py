@@ -32,7 +32,7 @@ def generate_request_id() -> str:
 #  PII Masking
 # ═══════════════════════════════════════════
 
-_EMAIL_PATTERN = re.compile(r'([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})')
+_EMAIL_PATTERN = re.compile(r"([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})")
 
 _REDACT_PATTERNS = [
     (re.compile(r'("?password"?\s*[:=]\s*)"[^"]*"', re.I), r'\1"***"'),
@@ -62,6 +62,7 @@ def mask_pii(text: str) -> str:
 # ═══════════════════════════════════════════
 #  JSON Formatter
 # ═══════════════════════════════════════════
+
 
 class JSONFormatter(logging.Formatter):
     """Structured JSON log formatter for production."""
@@ -100,6 +101,7 @@ class HumanFormatter(logging.Formatter):
 #  Setup
 # ═══════════════════════════════════════════
 
+
 def setup_logging() -> None:
     """Configure application-wide logging."""
     root = logging.getLogger()
@@ -113,9 +115,7 @@ def setup_logging() -> None:
         handler.setFormatter(JSONFormatter())
         root.setLevel(logging.INFO)
     else:
-        handler.setFormatter(
-            HumanFormatter(HumanFormatter.FORMAT, datefmt="%H:%M:%S")
-        )
+        handler.setFormatter(HumanFormatter(HumanFormatter.FORMAT, datefmt="%H:%M:%S"))
         root.setLevel(logging.DEBUG)
 
     root.addHandler(handler)

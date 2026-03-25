@@ -6,6 +6,7 @@ Processes Stripe events to:
   - Record billing entries on invoice.paid
   - Handle subscription cancellations
 """
+
 import hashlib
 import hmac
 import logging
@@ -27,6 +28,7 @@ router = APIRouter()
 logger = logging.getLogger("unihr.stripe")
 
 # ── Stripe signature verification ──
+
 
 def _verify_stripe_signature(payload: bytes, sig_header: str, secret: str) -> dict:
     """Verify Stripe webhook signature and parse event.
@@ -67,6 +69,7 @@ def _verify_stripe_signature(payload: bytes, sig_header: str, secret: str) -> di
 
 
 # ── Webhook endpoint ──
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(deps.get_db)):
@@ -138,7 +141,10 @@ def _handle_checkout_completed(db: Session, session: dict):
     # Create billing record
     amount_total = session.get("amount_total")
     if not amount_total:
-        logger.error("checkout.session.completed: missing/zero amount_total for session %s", session.get("id"))
+        logger.error(
+            "checkout.session.completed: missing/zero amount_total for session %s",
+            session.get("id"),
+        )
         return
     amount = amount_total / 100  # Stripe amounts are in cents
     currency = (session.get("currency") or "usd").upper()

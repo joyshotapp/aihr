@@ -3,7 +3,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from app.models.permission import Department, FeaturePermission
 from app.schemas.permission import (
-    DepartmentCreate, DepartmentUpdate,
+    DepartmentCreate,
+    DepartmentUpdate,
     FeaturePermissionCreate,
 )
 
@@ -12,9 +13,8 @@ from app.schemas.permission import (
 #  Department CRUD
 # ═══════════════════════════════════════════
 
-def create_department(
-    db: Session, *, tenant_id: UUID, obj_in: DepartmentCreate
-) -> Department:
+
+def create_department(db: Session, *, tenant_id: UUID, obj_in: DepartmentCreate) -> Department:
     db_obj = Department(
         tenant_id=tenant_id,
         name=obj_in.name,
@@ -27,18 +27,14 @@ def create_department(
     return db_obj
 
 
-def get_department(
-    db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None
-) -> Optional[Department]:
+def get_department(db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None) -> Optional[Department]:
     q = db.query(Department).filter(Department.id == department_id)
     if tenant_id is not None:
         q = q.filter(Department.tenant_id == tenant_id)
     return q.first()
 
 
-def get_departments_by_tenant(
-    db: Session, *, tenant_id: UUID, include_inactive: bool = False
-) -> List[Department]:
+def get_departments_by_tenant(db: Session, *, tenant_id: UUID, include_inactive: bool = False) -> List[Department]:
     q = db.query(Department).filter(Department.tenant_id == tenant_id)
     if not include_inactive:
         q = q.filter(Department.is_active)
@@ -46,7 +42,11 @@ def get_departments_by_tenant(
 
 
 def update_department(
-    db: Session, *, department_id: UUID, tenant_id: Optional[UUID] = None, obj_in: DepartmentUpdate
+    db: Session,
+    *,
+    department_id: UUID,
+    tenant_id: Optional[UUID] = None,
+    obj_in: DepartmentUpdate,
 ) -> Optional[Department]:
     dept = get_department(db, department_id=department_id, tenant_id=tenant_id)
     if not dept:
@@ -73,9 +73,8 @@ def delete_department(db: Session, *, department_id: UUID, tenant_id: Optional[U
 #  Feature Permission CRUD
 # ═══════════════════════════════════════════
 
-def get_feature_permissions(
-    db: Session, *, tenant_id: UUID
-) -> List[FeaturePermission]:
+
+def get_feature_permissions(db: Session, *, tenant_id: UUID) -> List[FeaturePermission]:
     return (
         db.query(FeaturePermission)
         .filter(FeaturePermission.tenant_id == tenant_id)
@@ -98,12 +97,8 @@ def get_feature_permission(
     return q.first()
 
 
-def set_feature_permission(
-    db: Session, *, tenant_id: UUID, obj_in: FeaturePermissionCreate
-) -> FeaturePermission:
-    existing = get_feature_permission(
-        db, tenant_id=tenant_id, feature=obj_in.feature, role=obj_in.role
-    )
+def set_feature_permission(db: Session, *, tenant_id: UUID, obj_in: FeaturePermissionCreate) -> FeaturePermission:
+    existing = get_feature_permission(db, tenant_id=tenant_id, feature=obj_in.feature, role=obj_in.role)
     if existing:
         existing.allowed = obj_in.allowed
         existing.config = obj_in.config or {}
@@ -123,9 +118,7 @@ def set_feature_permission(
     return db_obj
 
 
-def is_feature_allowed(
-    db: Session, *, tenant_id: UUID, feature: str, role: str
-) -> bool:
+def is_feature_allowed(db: Session, *, tenant_id: UUID, feature: str, role: str) -> bool:
     """
     檢查功能是否對特定角色開放。
     優先順序：

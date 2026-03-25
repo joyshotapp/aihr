@@ -34,7 +34,7 @@ def get_audit_logs(
     """
     # 權限檢查
     check_audit_permission(current_user)
-    
+
     logs = crud_audit.get_audit_logs(
         db,
         tenant_id=current_user.tenant_id,
@@ -42,7 +42,7 @@ def get_audit_logs(
         start_date=start_date,
         end_date=end_date,
         skip=skip,
-        limit=limit
+        limit=limit,
     )
     return logs
 
@@ -60,12 +60,9 @@ def get_usage_summary(
     """
     # 權限檢查
     check_audit_permission(current_user)
-    
+
     summary = crud_audit.get_usage_summary(
-        db,
-        tenant_id=current_user.tenant_id,
-        start_date=start_date,
-        end_date=end_date
+        db, tenant_id=current_user.tenant_id, start_date=start_date, end_date=end_date
     )
     return summary
 
@@ -83,17 +80,15 @@ def get_usage_by_action(
     """
     # 權限檢查
     check_audit_permission(current_user)
-    
+
     usage = crud_audit.get_usage_by_action_type(
-        db,
-        tenant_id=current_user.tenant_id,
-        start_date=start_date,
-        end_date=end_date
+        db, tenant_id=current_user.tenant_id, start_date=start_date, end_date=end_date
     )
     return usage
 
 
 # ─── 個人用量端點（所有登入用戶可查詢自己的數據）───
+
 
 @router.get("/usage/me/summary", response_model=UsageSummary)
 def get_my_usage_summary(
@@ -151,7 +146,7 @@ def get_usage_records(
     """
     # 權限檢查
     check_audit_permission(current_user)
-    
+
     records = crud_audit.get_usage_records(
         db,
         tenant_id=current_user.tenant_id,
@@ -159,18 +154,19 @@ def get_usage_records(
         start_date=start_date,
         end_date=end_date,
         skip=skip,
-        limit=limit
+        limit=limit,
     )
     return records
 
 
 # ─── Export Helpers ───
 
+
 def _csv_stream(rows: list, columns: list[tuple[str, str]]) -> StreamingResponse:
     """產生 CSV StreamingResponse"""
     output = io.StringIO()
     # Add BOM for Excel UTF-8 compatibility
-    output.write('\ufeff')
+    output.write("\ufeff")
     writer = csv.writer(output)
     writer.writerow([label for _, label in columns])
     for row in rows:
@@ -196,16 +192,22 @@ def _pdf_stream(title: str, rows: list, columns: list[tuple[str, str]]) -> Strea
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Table,
+        TableStyle,
+        Paragraph,
+        Spacer,
+    )
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15*mm, bottomMargin=15*mm)
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=15 * mm, bottomMargin=15 * mm)
     styles = getSampleStyleSheet()
     story = []
 
     # Title
     story.append(Paragraph(title, styles["Title"]))
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1, 6 * mm))
 
     # Table data
     header = [label for _, label in columns]
@@ -218,18 +220,22 @@ def _pdf_stream(title: str, rows: list, columns: list[tuple[str, str]]) -> Strea
 
     col_widths = [max(60, 700 // len(columns))] * len(columns)
     table = Table(data, colWidths=col_widths, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, 0), 9),
-        ("FONTSIZE", (0, 1), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
     story.append(table)
     doc.build(story)
     buf.seek(0)
@@ -241,6 +247,7 @@ def _pdf_stream(title: str, rows: list, columns: list[tuple[str, str]]) -> Strea
 
 
 # ─── Export Endpoints ───
+
 
 @router.get("/logs/export")
 def export_audit_logs(
@@ -332,11 +339,11 @@ def log_audit(
     action: str,
     resource_type: Optional[str] = None,
     resource_id: Optional[str] = None,
-    details: Optional[dict] = None
+    details: Optional[dict] = None,
 ):
     """記錄稽核日誌"""
     ip_address = request.client.host if request.client else None
-    
+
     crud_audit.create_audit_log(
         db,
         tenant_id=current_user.tenant_id,
@@ -345,7 +352,7 @@ def log_audit(
         resource_type=resource_type,
         resource_id=resource_id,
         details=details,
-        ip_address=ip_address
+        ip_address=ip_address,
     )
 
 
@@ -359,7 +366,7 @@ def log_usage(
     output_tokens: int = 0,
     pinecone_queries: int = 0,
     embedding_calls: int = 0,
-    metadata: Optional[dict] = None
+    metadata: Optional[dict] = None,
 ):
     """記錄用量"""
     # 成本估算（範例費率，實際應從配置讀取）
@@ -367,14 +374,14 @@ def log_usage(
     COST_PER_OUTPUT_TOKEN = 0.00003  # $0.03 per 1K tokens
     COST_PER_PINECONE_QUERY = 0.0001  # $0.0001 per query
     COST_PER_EMBEDDING_CALL = 0.0001  # $0.0001 per call
-    
+
     estimated_cost = (
-        input_tokens * COST_PER_INPUT_TOKEN +
-        output_tokens * COST_PER_OUTPUT_TOKEN +
-        pinecone_queries * COST_PER_PINECONE_QUERY +
-        embedding_calls * COST_PER_EMBEDDING_CALL
+        input_tokens * COST_PER_INPUT_TOKEN
+        + output_tokens * COST_PER_OUTPUT_TOKEN
+        + pinecone_queries * COST_PER_PINECONE_QUERY
+        + embedding_calls * COST_PER_EMBEDDING_CALL
     )
-    
+
     crud_audit.create_usage_record(
         db,
         tenant_id=tenant_id,
@@ -385,5 +392,5 @@ def log_usage(
         pinecone_queries=pinecone_queries,
         embedding_calls=embedding_calls,
         estimated_cost=estimated_cost,
-        metadata=metadata
+        metadata=metadata,
     )

@@ -12,7 +12,12 @@ class BillingRecord(Base):
     __tablename__ = "billing_records"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     # NewebPay TradeNo or manual reference
     external_id = Column(String(255), nullable=True, unique=True)
     amount_usd = Column(Numeric(10, 2), nullable=False)

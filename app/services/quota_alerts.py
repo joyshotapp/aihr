@@ -2,6 +2,7 @@
 配額告警通知服務（Quota Alert Service）
 在配額接近上限或超額時發送通知
 """
+
 import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -21,18 +22,21 @@ logger = logging.getLogger(__name__)
 #  Alert Record Model
 # ═══════════════════════════════════════════
 
+
 class QuotaAlert(Base):
     """配額告警記錄"""
+
     import uuid as _uuid
+
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=_uuid.uuid4, index=True)
     tenant_id = Column(PGUUID(as_uuid=True), nullable=False, index=True)
-    alert_type = Column(String, nullable=False)        # warning, exceeded
-    resource = Column(String, nullable=False)           # users, documents, queries, tokens, storage
+    alert_type = Column(String, nullable=False)  # warning, exceeded
+    resource = Column(String, nullable=False)  # users, documents, queries, tokens, storage
     current_value = Column(Integer, default=0)
     limit_value = Column(Integer, nullable=True)
     usage_ratio = Column(Float, default=0.0)
     message = Column(String, nullable=True)
-    notified = Column(Boolean, default=False)           # 是否已發送通知
+    notified = Column(Boolean, default=False)  # 是否已發送通知
     notified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -41,15 +45,36 @@ class QuotaAlert(Base):
 #  Alert Service
 # ═══════════════════════════════════════════
 
+
 class QuotaAlertService:
     """配額告警服務"""
 
     RESOURCE_MAP = {
         "users_usage_ratio": ("users", "max_users", "current_users", "使用者"),
-        "documents_usage_ratio": ("documents", "max_documents", "current_documents", "文件"),
-        "storage_usage_ratio": ("storage", "max_storage_mb", "current_storage_mb", "儲存空間"),
-        "queries_usage_ratio": ("queries", "monthly_query_limit", "current_monthly_queries", "月查詢次數"),
-        "tokens_usage_ratio": ("tokens", "monthly_token_limit", "current_monthly_tokens", "月 Token 量"),
+        "documents_usage_ratio": (
+            "documents",
+            "max_documents",
+            "current_documents",
+            "文件",
+        ),
+        "storage_usage_ratio": (
+            "storage",
+            "max_storage_mb",
+            "current_storage_mb",
+            "儲存空間",
+        ),
+        "queries_usage_ratio": (
+            "queries",
+            "monthly_query_limit",
+            "current_monthly_queries",
+            "月查詢次數",
+        ),
+        "tokens_usage_ratio": (
+            "tokens",
+            "monthly_token_limit",
+            "current_monthly_tokens",
+            "月 Token 量",
+        ),
     }
 
     @staticmethod
@@ -65,7 +90,12 @@ class QuotaAlertService:
         threshold = status.get("quota_alert_threshold", 0.8)
         alerts: List[Dict[str, Any]] = []
 
-        for ratio_key, (resource, limit_key, current_key, label) in QuotaAlertService.RESOURCE_MAP.items():
+        for ratio_key, (
+            resource,
+            limit_key,
+            current_key,
+            label,
+        ) in QuotaAlertService.RESOURCE_MAP.items():
             ratio = status.get(ratio_key)
             if ratio is None:
                 continue
@@ -78,7 +108,7 @@ class QuotaAlertService:
                 message = f"[超額] {label}已超過上限：{current}/{limit_val}"
             elif ratio >= threshold:
                 alert_type = "warning"
-                message = f"[警告] {label}已達 {int(ratio*100)}%：{current}/{limit_val}"
+                message = f"[警告] {label}已達 {int(ratio * 100)}%：{current}/{limit_val}"
             else:
                 continue
 
@@ -106,21 +136,20 @@ class QuotaAlertService:
                 message=message,
             )
             db.add(alert)
-            alerts.append({
-                "alert_type": alert_type,
-                "resource": resource,
-                "message": message,
-                "current": current,
-                "limit": limit_val,
-                "ratio": ratio,
-            })
+            alerts.append(
+                {
+                    "alert_type": alert_type,
+                    "resource": resource,
+                    "message": message,
+                    "current": current,
+                    "limit": limit_val,
+                    "ratio": ratio,
+                }
+            )
 
         if alerts:
             db.commit()
-            logger.warning(
-                "Quota alerts for tenant %s: %d alerts",
-                tenant_id, len(alerts)
-            )
+            logger.warning("Quota alerts for tenant %s: %d alerts", tenant_id, len(alerts))
 
         return alerts
 
@@ -163,7 +192,9 @@ class QuotaAlertService:
         """
         logger.info(
             "Sending quota alert email to %s for tenant %s: %d alerts",
-            recipient, tenant_id, len(alerts),
+            recipient,
+            tenant_id,
+            len(alerts),
         )
         # TODO: 實作 Email 發送
         # import smtplib

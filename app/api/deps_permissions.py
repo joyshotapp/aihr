@@ -2,6 +2,7 @@
 Permission checking utilities for role-based access control
 with department-scoped and feature-toggle support.
 """
+
 from typing import List, Optional
 from uuid import UUID
 from fastapi import HTTPException, status, Depends
@@ -15,7 +16,11 @@ from app.config import settings
 def _ensure_privileged_mfa(current_user: User) -> None:
     if not getattr(settings, "MFA_REQUIRED_FOR_PRIVILEGED", False):
         return
-    privileged = current_user.is_superuser or current_user.role in ["owner", "admin", "hr"]
+    privileged = current_user.is_superuser or current_user.role in [
+        "owner",
+        "admin",
+        "hr",
+    ]
     if privileged and not current_user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -23,7 +28,9 @@ def _ensure_privileged_mfa(current_user: User) -> None:
         )
 
 
-def require_superuser(current_user: User = Depends(deps.get_current_active_user)) -> User:
+def require_superuser(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> User:
     """Dependency: require current user to be a superuser."""
     if not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Superuser access required")
@@ -42,10 +49,10 @@ class PermissionChecker:
         ):
             ...  # current_user 已通過權限檢查
     """
-    
+
     def __init__(self, allowed_roles: List[str]):
         self.allowed_roles = allowed_roles
-    
+
     def __call__(self, current_user: User = Depends(deps.get_current_active_user)) -> User:
         if current_user.is_superuser:
             _ensure_privileged_mfa(current_user)
@@ -53,7 +60,7 @@ class PermissionChecker:
         if current_user.role not in self.allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"此操作需要以下角色之一: {', '.join(self.allowed_roles)}"
+                detail=f"此操作需要以下角色之一: {', '.join(self.allowed_roles)}",
             )
         _ensure_privileged_mfa(current_user)
         return current_user
@@ -79,10 +86,7 @@ def check_document_permission(user: User, action: str) -> None:
         return
     if action in ["create", "update", "delete"]:
         if user.role not in ["owner", "admin", "hr"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="您沒有權限執行此操作"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="您沒有權限執行此操作")
     elif action == "read":
         # 所有角色都可以讀取
         pass
@@ -100,7 +104,7 @@ def check_audit_permission(user: User) -> None:
     if user.role not in ["owner", "admin", "hr"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="您沒有權限查看稽核日誌或用量報表"
+            detail="您沒有權限查看稽核日誌或用量報表",
         )
 
 
@@ -114,10 +118,7 @@ def check_user_management_permission(user: User) -> None:
     if user.is_superuser:
         return
     if user.role not in ["owner", "admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="您沒有權限管理使用者"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="您沒有權限管理使用者")
 
 
 def check_department_permission(user: User) -> None:
@@ -130,10 +131,7 @@ def check_department_permission(user: User) -> None:
     if user.is_superuser:
         return
     if user.role not in ["owner", "admin", "hr"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="您沒有權限管理部門"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="您沒有權限管理部門")
 
 
 def check_feature_enabled(db: Session, user: User, feature: str) -> None:
@@ -144,13 +142,11 @@ def check_feature_enabled(db: Session, user: User, feature: str) -> None:
     """
     if user.is_superuser:
         return
-    allowed = crud_permission.is_feature_allowed(
-        db, tenant_id=user.tenant_id, feature=feature, role=user.role
-    )
+    allowed = crud_permission.is_feature_allowed(db, tenant_id=user.tenant_id, feature=feature, role=user.role)
     if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"此功能模組 [{feature}] 未對您的角色開啓"
+            detail=f"此功能模組 [{feature}] 未對您的角色開啓",
         )
 
 

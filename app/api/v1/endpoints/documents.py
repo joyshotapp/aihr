@@ -11,7 +11,10 @@ from sqlalchemy.orm import Session
 import boto3
 
 from app.api import deps
-from app.api.deps_permissions import check_document_permission, can_access_document_by_department
+from app.api.deps_permissions import (
+    check_document_permission,
+    can_access_document_by_department,
+)
 from app.crud import crud_document
 from app.models.user import User
 from app.models.document import Document as DocumentModel
@@ -64,9 +67,7 @@ def list_documents(
         )
     else:
         if current_user.is_superuser or current_user.role in ["owner", "admin", "hr"]:
-            documents = crud_document.get_by_tenant(
-                db, tenant_id=current_user.tenant_id, skip=skip, limit=limit
-            )
+            documents = crud_document.get_by_tenant(db, tenant_id=current_user.tenant_id, skip=skip, limit=limit)
         else:
             q = db.query(DocumentModel).filter(DocumentModel.tenant_id == current_user.tenant_id)
             if current_user.department_id is None:
@@ -78,12 +79,7 @@ def list_documents(
                         DocumentModel.department_id == current_user.department_id,
                     )
                 )
-            documents = (
-                q.order_by(DocumentModel.created_at.desc())
-                .offset(skip)
-                .limit(limit)
-                .all()
-            )
+            documents = q.order_by(DocumentModel.created_at.desc()).offset(skip).limit(limit).all()
     return documents
 
 
@@ -103,27 +99,25 @@ async def upload_document(
     """
     # 權限檢查
     check_document_permission(current_user, "create")
-    
+
     # 1. 驗證文件類型（支援所有 Phase 0-2 格式）
     from app.services.document_parser import DocumentParser, SUPPORTED_FORMATS
+
     allowed_extensions = set(SUPPORTED_FORMATS.keys())
     file_ext = os.path.splitext(file.filename)[1].lower()
-    
+
     if file_ext not in allowed_extensions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"不支援的文件類型: {file_ext}。支援的類型: {', '.join(sorted(allowed_extensions))}"
+            detail=f"不支援的文件類型: {file_ext}。支援的類型: {', '.join(sorted(allowed_extensions))}",
         )
-    
+
     # 2. 偵測文件類型
     try:
         file_type = DocumentParser.detect_file_type(file.filename)
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     # 3. Streaming 讀取並檢查文件大小（避免大檔案一次載入記憶體）
     CHUNK_READ_SIZE = 1024 * 1024  # 1MB per read
     chunks_buffer = []
@@ -136,15 +130,12 @@ async def upload_document(
         if file_size > settings.MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"文件過大（超過 {settings.MAX_FILE_SIZE / 1024 / 1024:.0f} MB 上限）"
+                detail=f"文件過大（超過 {settings.MAX_FILE_SIZE / 1024 / 1024:.0f} MB 上限）",
             )
         chunks_buffer.append(chunk)
-    
+
     if file_size == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="文件為空"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件為空")
 
     loop = asyncio.get_event_loop()
     file_content = b"".join(chunks_buffer)
@@ -164,21 +155,18 @@ async def upload_document(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="檔案安全掃描服務暫時不可用，請稍後再試",
             )
-    
+
     # 5. 建立文件記錄
-    doc_in = DocumentCreate(
-        filename=file.filename,
-        file_type=file_type
-    )
-    
+    doc_in = DocumentCreate(filename=file.filename, file_type=file_type)
+
     document = crud_document.create(
         db,
         obj_in=doc_in,
         tenant_id=current_user.tenant_id,
         uploaded_by=current_user.id,
-        file_size=file_size
+        file_size=file_size,
     )
-    
+
     # 6. 上传文件到 Cloudflare R2
     r2_key = f"{current_user.tenant_id}/{document.id}{file_ext}"
     await loop.run_in_executor(
@@ -200,7 +188,7 @@ async def upload_document(
         },
         queue=queue_name,
     )
-    
+
     return document
 
 
@@ -223,13 +211,10 @@ def get_document(
             tenant_id=current_user.tenant_id,
         )
     )
-    
+
     if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文件不存在"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+
     return document
 
 
@@ -250,7 +235,7 @@ def delete_document(
     """
     # 權限檢查
     check_document_permission(current_user, "delete")
-    
+
     document = (
         crud_document.get(db, document_id=document_id, _internal=True)
         if current_user.is_superuser
@@ -260,13 +245,10 @@ def delete_document(
             tenant_id=current_user.tenant_id,
         )
     )
-    
+
     if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="文件不存在"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+
     # 取得 chunks（供 Pinecone 刪除和 DB 清除用）
     chunks = (
         crud_document.get_chunks(db, document_id=document_id)
@@ -283,6 +265,7 @@ def delete_document(
         vector_ids = [c.vector_id for c in chunks if c.vector_id]
         if vector_ids:
             from pinecone import Pinecone
+
             pc = Pinecone(api_key=settings.PINECONE_API_KEY)
             idx = pc.Index(settings.PINECONE_INDEX_NAME)
             idx.delete(ids=vector_ids, namespace=str(document.tenant_id))
@@ -304,7 +287,7 @@ def delete_document(
         _get_r2_client().delete_object(Bucket=settings.R2_BUCKET, Key=r2_key)
     except Exception as e:
         print(f"刪除 R2 文件失敗: {e}")
-    
+
     # 刪除資料庫記錄
     if current_user.is_superuser:
         crud_document.delete(db, document_id=document_id, tenant_id=document.tenant_id)
@@ -314,11 +297,12 @@ def delete_document(
             document_id=document_id,
             tenant_id=current_user.tenant_id,
         )
-    
+
     return {"message": "文件已刪除", "document_id": str(document_id)}
 
 
 # ── Response schemas ──
+
 
 class BatchUploadResult(BaseModel):
     total: int
@@ -355,9 +339,7 @@ async def _process_single_upload(
     file_ext = os.path.splitext(filename)[1].lower()
 
     if file_ext not in allowed_extensions:
-        raise ValueError(
-            f"不支援的文件類型: {file_ext}。支援的類型: {', '.join(sorted(allowed_extensions))}"
-        )
+        raise ValueError(f"不支援的文件類型: {file_ext}。支援的類型: {', '.join(sorted(allowed_extensions))}")
 
     file_type = DocumentParser.detect_file_type(filename)
 
@@ -481,6 +463,7 @@ async def batch_upload_documents(
 
 # ── Batch progress tracking (P1) ──
 
+
 @router.post("/batch-progress", response_model=BatchProgressResponse)
 def batch_progress(
     *,
@@ -518,6 +501,7 @@ def batch_progress(
 
 # ── Per-document processing progress (real-time via Redis) ──
 
+
 class DocumentProgress(BaseModel):
     document_id: str
     status: str
@@ -554,6 +538,7 @@ def document_progress(
         try:
             import json
             from app.core.redis_client import get_redis_client
+
             r = get_redis_client()
             if r:
                 data = r.get(f"doc_progress:{str(document_id)}")

@@ -1,6 +1,7 @@
 """
 部門管理 + 功能權限管理 API
 """
+
 from typing import Any, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,6 +31,7 @@ router = APIRouter()
 #  部門 CRUD 端點
 # ═══════════════════════════════════════════
 
+
 @router.get("/", response_model=List[Department])
 def list_departments(
     include_inactive: bool = False,
@@ -50,9 +52,7 @@ def department_tree(
 ) -> Any:
     """取得部門樹狀結構"""
     check_department_permission(current_user)
-    all_depts = crud_permission.get_departments_by_tenant(
-        db, tenant_id=current_user.tenant_id
-    )
+    all_depts = crud_permission.get_departments_by_tenant(db, tenant_id=current_user.tenant_id)
 
     # Build tree
     dept_map = {d.id: DepartmentTree.model_validate(d) for d in all_depts}
@@ -75,9 +75,7 @@ def create_department(
     check_department_permission(current_user)
     if current_user.role not in ["owner", "admin"] and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="只有 owner/admin 可建立部門")
-    return crud_permission.create_department(
-        db, tenant_id=current_user.tenant_id, obj_in=dept_in
-    )
+    return crud_permission.create_department(db, tenant_id=current_user.tenant_id, obj_in=dept_in)
 
 
 @router.get("/{department_id}", response_model=Department)
@@ -108,7 +106,12 @@ def update_department(
     dept = crud_permission.get_department(db, department_id=department_id, tenant_id=current_user.tenant_id)
     if not dept:
         raise HTTPException(status_code=404, detail="部門不存在")
-    updated = crud_permission.update_department(db, department_id=department_id, tenant_id=current_user.tenant_id, obj_in=dept_in)
+    updated = crud_permission.update_department(
+        db,
+        department_id=department_id,
+        tenant_id=current_user.tenant_id,
+        obj_in=dept_in,
+    )
     return updated
 
 
@@ -131,6 +134,7 @@ def delete_department(
 # ═══════════════════════════════════════════
 #  功能權限端點
 # ═══════════════════════════════════════════
+
 
 @router.get("/features/available")
 def list_available_features(
@@ -161,8 +165,6 @@ def set_feature_permission(
     if perm_in.feature not in AVAILABLE_FEATURES:
         raise HTTPException(
             status_code=400,
-            detail=f"未知功能模組: {perm_in.feature}。可用: {AVAILABLE_FEATURES}"
+            detail=f"未知功能模組: {perm_in.feature}。可用: {AVAILABLE_FEATURES}",
         )
-    return crud_permission.set_feature_permission(
-        db, tenant_id=current_user.tenant_id, obj_in=perm_in
-    )
+    return crud_permission.set_feature_permission(db, tenant_id=current_user.tenant_id, obj_in=perm_in)

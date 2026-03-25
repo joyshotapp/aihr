@@ -17,6 +17,7 @@ _langfuse_available = False
 
 try:
     from langfuse import Langfuse
+
     _HAS_LANGFUSE = True
 except ImportError:
     _HAS_LANGFUSE = False

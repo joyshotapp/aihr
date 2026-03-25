@@ -40,18 +40,21 @@ from bs4 import BeautifulSoup
 # ── 可選依賴（graceful degradation） ──
 try:
     import tiktoken
+
     _HAS_TIKTOKEN = True
 except ImportError:
     _HAS_TIKTOKEN = False
 
 try:
     import pdfplumber
+
     _HAS_PDFPLUMBER = True
 except ImportError:
     _HAS_PDFPLUMBER = False
 
 try:
     import openpyxl
+
     _HAS_OPENPYXL = True
 except ImportError:
     _HAS_OPENPYXL = False
@@ -59,36 +62,42 @@ except ImportError:
 try:
     import pytesseract
     from PIL import Image
+
     _HAS_OCR = True
 except ImportError:
     _HAS_OCR = False
 
 try:
     from pdf2image import convert_from_path
+
     _HAS_PDF2IMAGE = True
 except ImportError:
     _HAS_PDF2IMAGE = False
 
 try:
     import chardet
+
     _HAS_CHARDET = True
 except ImportError:
     _HAS_CHARDET = False
 
 try:
     from striprtf.striprtf import rtf_to_text
+
     _HAS_RTF = True
 except ImportError:
     _HAS_RTF = False
 
 try:
     from pptx import Presentation as PptxPresentation
+
     _HAS_PPTX = True
 except ImportError:
     _HAS_PPTX = False
 
 try:
     import trafilatura
+
     _HAS_TRAFILATURA = True
 except ImportError:
     _HAS_TRAFILATURA = False
@@ -118,17 +127,20 @@ def _validate_external_url(url: str) -> str:
 
     for address in resolved:
         ip = ipaddress.ip_address(address)
-        if any([
-            ip.is_private,
-            ip.is_loopback,
-            ip.is_link_local,
-            ip.is_multicast,
-            ip.is_reserved,
-            ip.is_unspecified,
-        ]):
+        if any(
+            [
+                ip.is_private,
+                ip.is_loopback,
+                ip.is_link_local,
+                ip.is_multicast,
+                ip.is_reserved,
+                ip.is_unspecified,
+            ]
+        ):
             raise ValueError("禁止存取內部或保留網段")
 
     return url.strip()
+
 
 def _get_available_ocr_langs() -> List[str]:
     if not _HAS_OCR:
@@ -138,9 +150,11 @@ def _get_available_ocr_langs() -> List[str]:
     except Exception:
         return []
 
+
 def _preprocess_for_ocr(img: "Image.Image") -> "Image.Image":
     """影像前處理：灰階 → 二值化 → 適當放大，提升 Tesseract 中文辨識品質"""
     from PIL import ImageFilter, ImageOps
+
     # 灰階
     gray = ImageOps.grayscale(img)
     # 放大小圖（寬 < 1500px 時 2x 上採樣，讓 Tesseract 更容易辨識）
@@ -196,6 +210,7 @@ def _normalize_llamaparse_language(lang: str) -> Optional[str]:
     }
     return aliases.get(value.lower(), value)
 
+
 def _ensure_llamaparse():
     """延遲載入 LlamaParse，只在第一次呼叫時 import"""
     global _HAS_LLAMAPARSE, _LlamaParseClient
@@ -203,6 +218,7 @@ def _ensure_llamaparse():
         return True
     try:
         from llama_cloud_services.parse import LlamaParse
+
         _LlamaParseClient = LlamaParse
         _HAS_LLAMAPARSE = True
         return True
@@ -210,12 +226,14 @@ def _ensure_llamaparse():
         try:
             # Fallback: 舊版 llama_parse 套件
             from llama_parse import LlamaParse
+
             _LlamaParseClient = LlamaParse
             _HAS_LLAMAPARSE = True
             return True
         except ImportError:
             _HAS_LLAMAPARSE = False
             return False
+
 
 logger = logging.getLogger(__name__)
 
@@ -224,14 +242,16 @@ logger = logging.getLogger(__name__)
 # 品質報告
 # ═══════════════════════════════════════════════════════════
 
+
 @dataclass
 class QualityReport:
     """文件解析品質報告"""
+
     format_detected: str = ""
     total_pages: int = 0
     total_chars: int = 0
     total_chunks: int = 0
-    quality_score: float = 0.0      # 0.0 ~ 1.0
+    quality_score: float = 0.0  # 0.0 ~ 1.0
     quality_level: str = "unknown"  # excellent / good / fair / poor / failed
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
@@ -319,9 +339,15 @@ SUPPORTED_FORMATS: Dict[str, str] = {
 
 # LlamaParse 支援的格式（這些格式優先走 LlamaParse 以獲得更好的品質）
 LLAMAPARSE_FORMATS: set = {
-    "pdf", "docx", "doc", "pptx", "ppt",
-    "xlsx", "xls",
-    "html", "rtf",
+    "pdf",
+    "docx",
+    "doc",
+    "pptx",
+    "ppt",
+    "xlsx",
+    "xls",
+    "html",
+    "rtf",
     "image",  # 含手寫 OCR
 }
 
@@ -329,6 +355,7 @@ LLAMAPARSE_FORMATS: set = {
 # ═══════════════════════════════════════════════════════════
 # DocumentParser 主類
 # ═══════════════════════════════════════════════════════════
+
 
 class DocumentParser:
     """
@@ -352,9 +379,7 @@ class DocumentParser:
         file_type = SUPPORTED_FORMATS.get(ext)
         if not file_type:
             supported = ", ".join(sorted(SUPPORTED_FORMATS.keys()))
-            raise ValueError(
-                f"不支援的文件類型: {ext}。支援的類型: {supported}"
-            )
+            raise ValueError(f"不支援的文件類型: {ext}。支援的類型: {supported}")
         return file_type
 
     @classmethod
@@ -380,30 +405,22 @@ class DocumentParser:
 
         # ── 判斷 LlamaParse 是否可用 ──
         from app.config import settings
+
         llamaparse_key = getattr(settings, "LLAMAPARSE_API_KEY", "")
         llamaparse_enabled = getattr(settings, "LLAMAPARSE_ENABLED", True)
         llamaparse_available = (
-            llamaparse_enabled
-            and llamaparse_key
-            and file_type in LLAMAPARSE_FORMATS
-            and _ensure_llamaparse()
+            llamaparse_enabled and llamaparse_key and file_type in LLAMAPARSE_FORMATS and _ensure_llamaparse()
         )
 
         # ── image 格式：仍走 LlamaParse 優先（handwriting OCR 品質差距大）──
         if llamaparse_available and file_type == "image":
             try:
-                text, report = cls._parse_with_llamaparse(
-                    file_path, file_type, report, llamaparse_key
-                )
+                text, report = cls._parse_with_llamaparse(file_path, file_type, report, llamaparse_key)
                 if text.strip() and report.quality_score >= 0.5:
                     report.parse_time_ms = int((time.time() - start) * 1000)
                     report.total_chars = len(text)
                     metadata = report.to_dict()
-                    logger.info(
-                        f"LlamaParse 解析成功 (image): "
-                        f"品質={report.quality_level}, "
-                        f"字元={report.total_chars}"
-                    )
+                    logger.info(f"LlamaParse 解析成功 (image): 品質={report.quality_level}, 字元={report.total_chars}")
                     return text.strip(), metadata
                 else:
                     report = QualityReport(format_detected=file_type)
@@ -466,9 +483,7 @@ class DocumentParser:
                     )
                     return llama_text.strip(), metadata
                 else:
-                    logger.warning(
-                        "LlamaParse 升級品質仍不足，採用 native 結果"
-                    )
+                    logger.warning("LlamaParse 升級品質仍不足，採用 native 結果")
             except Exception as e:
                 logger.warning(f"LlamaParse 升級失敗: {e}，採用 native 結果")
         elif not needs_escalation and llamaparse_available and file_type != "image":
@@ -561,7 +576,7 @@ class DocumentParser:
         table_count = 0
         with pdfplumber.open(file_path) as pdf:
             for page in pdf.pages:
-                for table in (page.extract_tables() or []):
+                for table in page.extract_tables() or []:
                     if not table:
                         continue
                     table_count += 1
@@ -576,14 +591,13 @@ class DocumentParser:
     def _ocr_pdf(file_path: str) -> Tuple[str, float]:
         """OCR 處理掃描型 PDF"""
         from app.config import settings
+
         images = convert_from_path(file_path, dpi=300)
         all_text: List[str] = []
         confidences: List[float] = []
         lang, _ = _pick_ocr_langs(settings.OCR_LANGS)
         for img in images:
-            data = pytesseract.image_to_data(
-                _preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT
-            )
+            data = pytesseract.image_to_data(_preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT)
             page_words: List[str] = []
             page_confs: List[float] = []
             for i, word in enumerate(data["text"]):
@@ -657,7 +671,9 @@ class DocumentParser:
         try:
             result = subprocess.run(
                 ["antiword", file_path],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if result.returncode == 0 and result.stdout.strip():
                 report.add_warning("使用 antiword 解析 .doc 格式，表格格式可能有損失")
@@ -668,11 +684,21 @@ class DocumentParser:
         # 嘗試 libreoffice
         try:
             import tempfile
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 result = subprocess.run(
-                    ["libreoffice", "--headless", "--convert-to", "txt",
-                     "--outdir", tmpdir, file_path],
-                    capture_output=True, text=True, timeout=60,
+                    [
+                        "libreoffice",
+                        "--headless",
+                        "--convert-to",
+                        "txt",
+                        "--outdir",
+                        tmpdir,
+                        file_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                 )
                 if result.returncode == 0:
                     txt_file = os.path.join(tmpdir, Path(file_path).stem + ".txt")
@@ -698,7 +724,7 @@ class DocumentParser:
                 raw = f.read()
 
             # 二進位檔案偵測：NULL bytes 幾乎不存在於文字檔案
-            null_count = raw.count(b'\x00')
+            null_count = raw.count(b"\x00")
             if null_count >= 2:
                 report.add_error("偵測到二進位檔案內容（包含大量 NULL bytes）")
                 report.add_suggestion("請確認上傳的是文字檔案而非二進位檔案")
@@ -718,7 +744,15 @@ class DocumentParser:
 
             # 依序嘗試解碼（utf-8-sig 優先以處理 BOM）
             text = None
-            for enc in ["utf-8-sig", encoding, "utf-8", "big5", "gbk", "cp1252", "latin-1"]:
+            for enc in [
+                "utf-8-sig",
+                encoding,
+                "utf-8",
+                "big5",
+                "gbk",
+                "cp1252",
+                "latin-1",
+            ]:
                 try:
                     text = raw.decode(enc)
                     if text.strip():
@@ -738,16 +772,22 @@ class DocumentParser:
             sample = text[:2000]
             garbled = sum(1 for c in sample if ord(c) > 0xFFF0) / max(len(sample), 1)
             # 控制字元偵測（排除 \t\n\r）
-            control_chars = sum(1 for c in sample if ord(c) < 32 and c not in '\t\n\r') / max(len(sample), 1)
+            control_chars = sum(1 for c in sample if ord(c) < 32 and c not in "\t\n\r") / max(len(sample), 1)
             if garbled > 0.1 or control_chars > 0.1:
                 report.add_warning("偵測到可能的亂碼或二進位內容，建議以 UTF-8 編碼儲存後重新上傳")
             # 可讀性偵測：判斷是否為真實文字內容
             # 真實文字應包含字母 / CJK / 數字 / 空白，而非隨機二進位解碼出的字元
-            text_like_chars = sum(1 for c in sample if (
-                c.isalpha() or c.isdigit() or c.isspace() or
-                "\u4e00" <= c <= "\u9fff" or  # CJK
-                c in '.,;:!?\'"-()[]{}\n\t/\\@#$%&*+=<>~`'
-            )) / max(len(sample), 1)
+            text_like_chars = sum(
+                1
+                for c in sample
+                if (
+                    c.isalpha()
+                    or c.isdigit()
+                    or c.isspace()
+                    or "\u4e00" <= c <= "\u9fff"  # CJK
+                    or c in ".,;:!?'\"-()[]{}\n\t/\\@#$%&*+=<>~`"
+                )
+            ) / max(len(sample), 1)
             if text_like_chars < 0.4:
                 report.add_error("檔案內容大部分為不可讀字元（可能為二進位檔案）")
                 report.add_suggestion("請確認上傳的是文字檔案而非二進位檔案")
@@ -881,7 +921,20 @@ class DocumentParser:
 
             parts: List[str] = []
             for el in soup.find_all(
-                ["h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "td", "th", "pre", "blockquote"]
+                [
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6",
+                    "p",
+                    "li",
+                    "td",
+                    "th",
+                    "pre",
+                    "blockquote",
+                ]
             ):
                 tag_name = el.name
                 t = el.get_text(strip=True)
@@ -1007,13 +1060,12 @@ class DocumentParser:
             report.total_pages = 1
 
             from app.config import settings
+
             lang, note = _pick_ocr_langs(settings.OCR_LANGS)
             if note:
                 report.add_warning(note)
 
-            data = pytesseract.image_to_data(
-                _preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT
-            )
+            data = pytesseract.image_to_data(_preprocess_for_ocr(img), lang=lang, output_type=pytesseract.Output.DICT)
             words: List[str] = []
             confs: List[float] = []
             for i, word in enumerate(data["text"]):
@@ -1106,13 +1158,24 @@ class DocumentParser:
     def _parse_ppt(cls, file_path: str, report: QualityReport) -> Tuple[str, QualityReport]:
         """舊格式 .ppt — 嘗試 LibreOffice 轉換，或提示用戶轉檔"""
         import subprocess
+
         try:
             import tempfile
+
             with tempfile.TemporaryDirectory() as tmpdir:
                 result = subprocess.run(
-                    ["libreoffice", "--headless", "--convert-to", "pptx",
-                     "--outdir", tmpdir, file_path],
-                    capture_output=True, text=True, timeout=120,
+                    [
+                        "libreoffice",
+                        "--headless",
+                        "--convert-to",
+                        "pptx",
+                        "--outdir",
+                        tmpdir,
+                        file_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
                 )
                 if result.returncode == 0:
                     pptx_file = os.path.join(tmpdir, Path(file_path).stem + ".pptx")
@@ -1149,16 +1212,24 @@ class DocumentParser:
         若解析品質不足或 API 不可用，呼叫者應 fallback 到內建解析器。
         """
         import nest_asyncio
+
         nest_asyncio.apply()
 
         # ── Langfuse span ──
         from app.services.langfuse_client import get_langfuse
+
         lf = get_langfuse()
         lf_trace = None
         lf_span = None
         parse_start = time.time()
         if lf:
-            lf_trace = lf.trace(name="llamaparse", metadata={"file_type": file_type, "file_path": os.path.basename(file_path)})
+            lf_trace = lf.trace(
+                name="llamaparse",
+                metadata={
+                    "file_type": file_type,
+                    "file_path": os.path.basename(file_path),
+                },
+            )
             lf_span = lf_trace.span(name="llamaparse_call", input={"file_type": file_type})
 
         # 根據文件類型調整解析參數
@@ -1179,6 +1250,7 @@ class DocumentParser:
         def run_parse(params: Dict[str, Any]) -> List[Any]:
             parser = _LlamaParseClient(**params)
             import asyncio
+
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
@@ -1201,11 +1273,13 @@ class DocumentParser:
             if language:
                 full["language"] = language
             if settings.LLAMAPARSE_AUTO_MODE:
-                full.update({
-                    "auto_mode": True,
-                    "auto_mode_trigger_on_image_in_page": True,
-                    "auto_mode_trigger_on_table_in_page": True,
-                })
+                full.update(
+                    {
+                        "auto_mode": True,
+                        "auto_mode_trigger_on_image_in_page": True,
+                        "auto_mode_trigger_on_table_in_page": True,
+                    }
+                )
             attempts.append(full)
 
             no_auto = dict(base_params)
@@ -1241,9 +1315,7 @@ class DocumentParser:
                     last_error = e
                     msg = str(e)
                     if "422" in msg or "Unprocessable" in msg:
-                        report.add_warning(
-                            f"LlamaParse 參數組合不相容（嘗試 {i}/{len(attempts)}），持續降級重試"
-                        )
+                        report.add_warning(f"LlamaParse 參數組合不相容（嘗試 {i}/{len(attempts)}），持續降級重試")
                         continue
                     raise
 
@@ -1272,11 +1344,13 @@ class DocumentParser:
             table_matches = re.findall(r"\|.*\|", text)
             if table_matches:
                 # 粗估表格數量（連續的表格行視為一個表格）
-                table_lines = [i for i, line in enumerate(text.split("\n")) if "|" in line and line.strip().startswith("|")]
+                table_lines = [
+                    i for i, line in enumerate(text.split("\n")) if "|" in line and line.strip().startswith("|")
+                ]
                 if table_lines:
                     table_groups = 1
                     for i in range(1, len(table_lines)):
-                        if table_lines[i] - table_lines[i-1] > 2:
+                        if table_lines[i] - table_lines[i - 1] > 2:
                             table_groups += 1
                     report.tables_detected = table_groups
 
@@ -1291,8 +1365,16 @@ class DocumentParser:
             # ── Langfuse: 記錄 LlamaParse 成本指標 ──
             if lf_span:
                 lf_span.end(
-                    output={"total_pages": report.total_pages, "total_chars": report.total_chars, "tables_detected": report.tables_detected},
-                    metadata={"quality_score": report.quality_score, "parse_engine": "llamaparse", "duration_s": round(time.time() - parse_start, 2)},
+                    output={
+                        "total_pages": report.total_pages,
+                        "total_chars": report.total_chars,
+                        "tables_detected": report.tables_detected,
+                    },
+                    metadata={
+                        "quality_score": report.quality_score,
+                        "parse_engine": "llamaparse",
+                        "duration_s": round(time.time() - parse_start, 2),
+                    },
                 )
             if lf:
                 lf.flush()
@@ -1385,6 +1467,7 @@ class DocumentParser:
 # TextChunker — 智慧切片
 # ═══════════════════════════════════════════════════════════
 
+
 class TextChunker:
     """
     智慧文字切片器
@@ -1437,6 +1520,7 @@ class TextChunker:
 
         # ── 嘗試模板切分 ──
         from app.services.chunk_templates import detect_template, split_by_template
+
         template = detect_template(text)
         if template:
             sections = split_by_template(text, template)
@@ -1444,6 +1528,7 @@ class TextChunker:
         else:
             sections = cls._split_into_sections(text)
             from app.config import settings
+
             min_section_tokens = (
                 settings.MARKDOWN_MIN_SECTION_TOKENS
                 if cls._is_markdown_like(text)

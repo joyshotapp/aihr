@@ -8,6 +8,7 @@
 
 所有寄信動作都經由 Celery worker 異步執行，避免阻塞 API 回應。
 """
+
 import logging
 from html import escape as _esc
 from typing import Optional
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 try:
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import Mail, Email, To, Content
+
     _HAS_SENDGRID = True
 except ImportError:
     _HAS_SENDGRID = False
@@ -45,7 +47,11 @@ def _send_via_sendgrid(
         sg = SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
         response = sg.send(message)
         if response.status_code in (200, 201, 202):
-            logger.info("Email sent via SendGrid to %s (status=%d)", to_email, response.status_code)
+            logger.info(
+                "Email sent via SendGrid to %s (status=%d)",
+                to_email,
+                response.status_code,
+            )
             return True
         logger.warning("SendGrid returned status %d for %s", response.status_code, to_email)
         return False
@@ -288,8 +294,13 @@ def send_onboarding_step2_email(to_email: str, full_name: str, doc_count: int) -
 # 帳務通知 Email
 # ═══════════════════════════════════════════════════════════
 
+
 def send_payment_success_email(
-    to_email: str, full_name: str, plan: str, amount: str, trade_no: str,
+    to_email: str,
+    full_name: str,
+    plan: str,
+    amount: str,
+    trade_no: str,
 ) -> bool:
     """付款成功通知"""
     safe_name = _esc(full_name)
@@ -332,7 +343,10 @@ def send_payment_failed_email(to_email: str, full_name: str, plan: str) -> bool:
 
 
 def send_subscription_expiring_email(
-    to_email: str, full_name: str, plan: str, expire_date: str,
+    to_email: str,
+    full_name: str,
+    plan: str,
+    expire_date: str,
 ) -> bool:
     """訂閱即將到期通知"""
     safe_name = _esc(full_name)

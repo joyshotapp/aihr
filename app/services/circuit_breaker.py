@@ -6,6 +6,7 @@
 
 三狀態：CLOSED → OPEN → HALF_OPEN → CLOSED
 """
+
 import logging
 import threading
 import time
@@ -24,13 +25,11 @@ class CircuitState(Enum):
 
 class CircuitOpenError(Exception):
     """斷路器已開啟，拒絕請求"""
+
     def __init__(self, name: str, remaining_seconds: float):
         self.name = name
         self.remaining_seconds = remaining_seconds
-        super().__init__(
-            f"Circuit breaker '{name}' is OPEN. "
-            f"Retry after {remaining_seconds:.0f}s."
-        )
+        super().__init__(f"Circuit breaker '{name}' is OPEN. Retry after {remaining_seconds:.0f}s.")
 
 
 class CircuitBreaker:
@@ -116,10 +115,7 @@ class CircuitBreaker:
             self._last_failure_time = time.monotonic()
             if self._failure_count >= self.failure_threshold:
                 if self._state != CircuitState.OPEN:
-                    logger.warning(
-                        f"[CircuitBreaker:{self.name}] → OPEN "
-                        f"(failures={self._failure_count})"
-                    )
+                    logger.warning(f"[CircuitBreaker:{self.name}] → OPEN (failures={self._failure_count})")
                 self._state = CircuitState.OPEN
 
 

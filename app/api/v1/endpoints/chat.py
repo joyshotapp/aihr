@@ -30,6 +30,7 @@ router = APIRouter()
 
 # ──────────── T7-1: SSE 串流端點 ────────────
 
+
 @router.post("/chat/stream")
 async def chat_stream(
     *,
@@ -82,7 +83,12 @@ async def chat_stream(
     )
 
     # 3. 取得歷史對話（T7-2 多輪）
-    history = _get_history(db, conversation.id, tenant_id=current_user.tenant_id, exclude_message_id=user_message.id)
+    history = _get_history(
+        db,
+        conversation.id,
+        tenant_id=current_user.tenant_id,
+        exclude_message_id=user_message.id,
+    )
 
     orchestrator = ChatOrchestrator()
 
@@ -92,13 +98,17 @@ async def chat_stream(
 
         # ── Langfuse trace（整條 RAG 流程） ──
         from app.services.langfuse_client import get_langfuse
+
         lf = get_langfuse()
         lf_trace = None
         if lf:
             lf_trace = lf.trace(
                 name="rag_chat",
                 user_id=str(current_user.id),
-                metadata={"tenant_id": str(current_user.tenant_id), "conversation_id": str(conversation.id)},
+                metadata={
+                    "tenant_id": str(current_user.tenant_id),
+                    "conversation_id": str(conversation.id),
+                },
                 input=request.question,
             )
 
@@ -109,9 +119,7 @@ async def chat_stream(
             # T7-2: 查詢改寫
             effective_question = request.question
             if history:
-                effective_question = await orchestrator.contextualize_query(
-                    request.question, history
-                )
+                effective_question = await orchestrator.contextualize_query(request.question, history)
 
             # Phase 2: 檢索
             ctx = await orchestrator.retrieve_context(
@@ -130,8 +138,16 @@ async def chat_stream(
                 lf_trace.span(
                     name="retrieval",
                     input=effective_question,
-                    output={"num_sources": len(ctx.get("sources", [])), "avg_chunk_score": avg_score, "has_policy": ctx["has_policy"], "has_labor_law": ctx["has_labor_law"]},
-                    metadata={"top_k": request.top_k, "chunk_scores": chunk_scores[:10]},
+                    output={
+                        "num_sources": len(ctx.get("sources", [])),
+                        "avg_chunk_score": avg_score,
+                        "has_policy": ctx["has_policy"],
+                        "has_labor_law": ctx["has_labor_law"],
+                    },
+                    metadata={
+                        "top_k": request.top_k,
+                        "chunk_scores": chunk_scores[:10],
+                    },
                 )
 
             # Phase 3: 串流生成
@@ -210,25 +226,24 @@ async def chat_stream(
                 lf_trace.update(output=clean_answer[:500])
                 lf.flush()
 
-            yield _sse({
-                "type": "done",
-                "message_id": str(assistant_message.id),
-                "conversation_id": str(conversation.id),
-            })
+            yield _sse(
+                {
+                    "type": "done",
+                    "message_id": str(assistant_message.id),
+                    "conversation_id": str(conversation.id),
+                }
+            )
 
         except Exception as e:
             logger.exception(f"chat_stream event_generator 錯誤: {e}")
             yield _sse({"type": "error", "content": "處理失敗，請稍後再試。"})
-
 
     headers = {
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
     }
-    return StreamingResponse(
-        event_generator(), media_type="text/event-stream", headers=headers
-    )
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -247,11 +262,8 @@ async def chat(
     - 支援多輪對話 (T7-2)
     """
     if not request.question.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="問題不能為空"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="問題不能為空")
+
     # 1. 獲取或建立對話
     conversation_id = request.conversation_id
     if conversation_id:
@@ -262,29 +274,26 @@ async def chat(
             tenant_id=current_user.tenant_id,
         )
         if not conversation:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="對話不存在"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="對話不存在")
     else:
         # 建立新對話
         conversation = crud_chat.create_conversation(
             db,
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
-            title=request.question[:50]  # 使用問題前 50 字作為標題
+            title=request.question[:50],  # 使用問題前 50 字作為標題
         )
-    
+
     # 2. 儲存用戶訊息
-    user_message = crud_chat.create_message(
-        db,
-        conversation_id=conversation.id,
-        role="user",
-        content=request.question
-    )
-    
+    user_message = crud_chat.create_message(db, conversation_id=conversation.id, role="user", content=request.question)
+
     # 3. 取得歷史對話（T7-2）
-    history = _get_history(db, conversation.id, tenant_id=current_user.tenant_id, exclude_message_id=user_message.id)
+    history = _get_history(
+        db,
+        conversation.id,
+        tenant_id=current_user.tenant_id,
+        exclude_message_id=user_message.id,
+    )
 
     # 4. 使用協調器處理查詢
     orchestrator = ChatOrchestrator()
@@ -294,32 +303,28 @@ async def chat(
         top_k=request.top_k,
         history=history,
     )
-    
+
     # 5. 儲存助手回應
     assistant_message = crud_chat.create_message(
-        db,
-        conversation_id=conversation.id,
-        role="assistant",
-        content=result["answer"]
+        db, conversation_id=conversation.id, role="assistant", content=result["answer"]
     )
-    
+
     # 6. 記錄用量
     # 輸入估算：系統 prompt（~600 tokens） + 問題 + context
     context_text_len = sum(
-        len(p) for p in (result.get("company_policy") and
-            [result["company_policy"].get("content", "")] or [])
+        len(p) for p in (result.get("company_policy") and [result["company_policy"].get("content", "")] or [])
     )
     SYSTEM_PROMPT_TOKENS = 600
     input_tokens = SYSTEM_PROMPT_TOKENS + len(request.question) // 2 + context_text_len // 2
     output_tokens = len(result["answer"]) // 2
     pinecone_queries = 1 if result.get("company_policy") else 0
-    
+
     # 從 labor_law 獲取實際 token 數（如果有）
     if result.get("labor_law") and result["labor_law"].get("usage"):
         usage = result["labor_law"]["usage"]
         input_tokens = usage.get("input_tokens", input_tokens)
         output_tokens = usage.get("output_tokens", output_tokens)
-    
+
     log_usage(
         db,
         tenant_id=current_user.tenant_id,
@@ -329,9 +334,9 @@ async def chat(
         output_tokens=output_tokens,
         pinecone_queries=pinecone_queries,
         embedding_calls=0,
-        metadata={"conversation_id": str(conversation.id)}
+        metadata={"conversation_id": str(conversation.id)},
     )
-    
+
     # 7. 返回結果
     return ChatResponse(
         request_id=result["request_id"],
@@ -343,7 +348,7 @@ async def chat(
         labor_law=result.get("labor_law"),
         sources=result["sources"],
         notes=result["notes"],
-        disclaimer=result["disclaimer"]
+        disclaimer=result["disclaimer"],
     )
 
 
@@ -360,7 +365,7 @@ def list_conversations(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
         skip=skip,
-        limit=limit
+        limit=limit,
     )
     return conversations
 
@@ -380,10 +385,7 @@ def get_conversation(
         tenant_id=current_user.tenant_id,
     )
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="對話不存在"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="對話不存在")
     return conversation
 
 
@@ -404,13 +406,14 @@ def get_conversation_messages(
         tenant_id=current_user.tenant_id,
     )
     if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="對話不存在"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="對話不存在")
+
     messages = crud_chat.get_conversation_messages(
-        db, conversation_id=conversation_id, tenant_id=current_user.tenant_id, skip=skip, limit=limit
+        db,
+        conversation_id=conversation_id,
+        tenant_id=current_user.tenant_id,
+        skip=skip,
+        limit=limit,
     )
     return messages
 
@@ -430,14 +433,12 @@ def delete_conversation(
         tenant_id=current_user.tenant_id,
     )
     if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="對話不存在"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="對話不存在")
     return {"message": "對話已刪除", "conversation_id": str(conversation_id)}
 
 
 # ──────────── T7-5: Feedback 回饋系統 ────────────
+
 
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
@@ -482,6 +483,7 @@ async def feedback_stats(
 
 # ──────────── T7-11: 對話匯出 ────────────
 
+
 @router.get("/conversations/{conversation_id}/export")
 async def export_conversation(
     *,
@@ -500,7 +502,9 @@ async def export_conversation(
     if not conversation:
         raise HTTPException(status_code=404, detail="對話不存在")
 
-    messages = crud_chat.get_conversation_messages(db, conversation_id=conversation_id, tenant_id=current_user.tenant_id)
+    messages = crud_chat.get_conversation_messages(
+        db, conversation_id=conversation_id, tenant_id=current_user.tenant_id
+    )
 
     lines = [f"# {conversation.title or '對話記錄'}\n"]
     lines.append(f"> 匯出時間：{time.strftime('%Y-%m-%d %H:%M')}\n\n---\n")
@@ -512,13 +516,12 @@ async def export_conversation(
     return Response(
         content,
         media_type="text/markdown; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="conversation_{conversation_id}.md"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="conversation_{conversation_id}.md"'},
     )
 
 
 # ──────────── T7-13: 對話搜尋 ────────────
+
 
 @router.get("/conversations/search")
 async def search_conversations(
@@ -540,6 +543,7 @@ async def search_conversations(
 
 # ──────────── T7-12: RAG 品質儀表板 ────────────
 
+
 @router.get("/dashboard/rag")
 async def rag_dashboard(
     *,
@@ -554,6 +558,7 @@ async def rag_dashboard(
 
 
 # ──────────── 內部 helper ────────────
+
 
 def _sse(data: dict) -> str:
     """格式化 SSE 事件。"""
@@ -578,17 +583,18 @@ def _get_history(
         history.append({"role": msg.role, "content": msg.content})
 
     # 最多保留最近 max_turns * 2 條（user+assistant 為一輪）
-    return history[-(max_turns * 2):]
+    return history[-(max_turns * 2) :]
 
 
 def _parse_suggestions(text: str) -> List[str]:
     """解析 LLM 回答中的 [建議問題] 區塊（T7-6）。"""
     import re
+
     marker = "[建議問題]"
     idx = text.find(marker)
     if idx == -1:
         return []
-    block = text[idx + len(marker):]
+    block = text[idx + len(marker) :]
     suggestions = re.findall(r"\d+\.\s*(.+)", block)
     return [s.strip() for s in suggestions if s.strip()][:3]
 

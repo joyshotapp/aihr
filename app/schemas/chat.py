@@ -61,6 +61,7 @@ class ChatResponse(BaseModel):
 
 # ──────────── T7-5: Feedback ────────────
 
+
 class FeedbackCreate(BaseModel):
     message_id: UUID
     rating: int  # 1=👎, 2=👍
@@ -94,6 +95,7 @@ class FeedbackStats(BaseModel):
 
 
 # ──────────── T7-13: 搜尋結果 ────────────
+
 
 class SearchResult(BaseModel):
     conversation_id: UUID

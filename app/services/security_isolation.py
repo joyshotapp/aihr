@@ -5,6 +5,7 @@
   - enhanced：加密靜態資料
   - dedicated：獨立加密金鑰
 """
+
 import uuid
 from typing import Optional
 from sqlalchemy import Column, String, Boolean, DateTime, func
@@ -19,19 +20,21 @@ from app.db.base_class import Base
 #  Model
 # ═══════════════════════════════════════════
 
+
 class TenantSecurityConfig(Base):
     """租戶安全組態"""
+
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(PGUUID(as_uuid=True), nullable=False, unique=True, index=True)
 
     isolation_level = Column(String, default="standard")  # standard, enhanced, dedicated
     # 保留欄位供向後相容（pgvector 已透過 SQL WHERE tenant_id 隔離）
-    pinecone_index_name = Column(String, nullable=True)    # deprecated: 已改用 pgvector
-    pinecone_namespace = Column(String, nullable=True)     # deprecated: 已改用 pgvector
-    encryption_key_id = Column(String, nullable=True)      # dedicated: 獨立加密金鑰 ID
-    data_retention_days = Column(String, default="365")     # 資料保留天數
-    ip_whitelist = Column(String, nullable=True)            # IP 白名單 (逗號分隔)
-    require_mfa = Column(Boolean, default=False)            # 是否要求 MFA
+    pinecone_index_name = Column(String, nullable=True)  # deprecated: 已改用 pgvector
+    pinecone_namespace = Column(String, nullable=True)  # deprecated: 已改用 pgvector
+    encryption_key_id = Column(String, nullable=True)  # dedicated: 獨立加密金鑰 ID
+    data_retention_days = Column(String, default="365")  # 資料保留天數
+    ip_whitelist = Column(String, nullable=True)  # IP 白名單 (逗號分隔)
+    require_mfa = Column(Boolean, default=False)  # 是否要求 MFA
     audit_log_export_enabled = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -40,6 +43,7 @@ class TenantSecurityConfig(Base):
 # ═══════════════════════════════════════════
 #  Schemas
 # ═══════════════════════════════════════════
+
 
 class SecurityConfigResponse(BaseModel):
     tenant_id: str
@@ -68,17 +72,12 @@ class SecurityConfigUpdate(BaseModel):
 #  CRUD
 # ═══════════════════════════════════════════
 
+
 def get_security_config(db: Session, tenant_id) -> Optional[TenantSecurityConfig]:
-    return (
-        db.query(TenantSecurityConfig)
-        .filter(TenantSecurityConfig.tenant_id == tenant_id)
-        .first()
-    )
+    return db.query(TenantSecurityConfig).filter(TenantSecurityConfig.tenant_id == tenant_id).first()
 
 
-def create_or_update_security_config(
-    db: Session, tenant_id, data: SecurityConfigUpdate
-) -> TenantSecurityConfig:
+def create_or_update_security_config(db: Session, tenant_id, data: SecurityConfigUpdate) -> TenantSecurityConfig:
     config = get_security_config(db, tenant_id)
     if not config:
         config = TenantSecurityConfig(tenant_id=tenant_id)

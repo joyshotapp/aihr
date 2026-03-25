@@ -17,7 +17,7 @@ logger = logging.getLogger("unihr.domain")
 _DOMAIN_CACHE: dict[str, str | None] = {}
 
 # Regex to detect bare IP addresses (IPv4 or IPv6)
-_IP_RE = re.compile(r'^[\d.:]+$')
+_IP_RE = re.compile(r"^[\d.:]+$")
 
 
 class CustomDomainMiddleware(BaseHTTPMiddleware):
@@ -50,10 +50,14 @@ class CustomDomainMiddleware(BaseHTTPMiddleware):
 
             db = SessionLocal()
             try:
-                record = db.query(CustomDomain).filter(
-                    CustomDomain.domain == host,
-                    CustomDomain.verified,
-                ).first()
+                record = (
+                    db.query(CustomDomain)
+                    .filter(
+                        CustomDomain.domain == host,
+                        CustomDomain.verified,
+                    )
+                    .first()
+                )
                 if record:
                     _DOMAIN_CACHE[host] = str(record.tenant_id)
                     request.state.resolved_tenant_id = str(record.tenant_id)

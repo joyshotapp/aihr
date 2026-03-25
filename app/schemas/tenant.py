@@ -111,12 +111,14 @@ PLAN_QUOTAS = {
         "monthly_token_limit": 5000000,
     },
     "enterprise": {
-        "max_users": None,       # 無限制
+        "max_users": None,  # 無限制
         "max_documents": None,
         "max_storage_mb": None,
         "monthly_query_limit": None,
         "monthly_token_limit": None,
     },
 }
+
+
 class TenantInDB(TenantInDBBase):
     pass

@@ -42,14 +42,14 @@ def create_user(
     """
     # 權限檢查
     check_user_management_permission(current_user)
-    
+
     # 檢查權限
     if not current_user.is_superuser and user_in.tenant_id != current_user.tenant_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to create user for this tenant"
+            detail="Not enough permissions to create user for this tenant",
         )
-    
+
     # 配額檢查
     if not current_user.is_superuser:
         quota = crud_tenant.check_quota(db, user_in.tenant_id, "user")
@@ -64,15 +64,15 @@ def create_user(
                     "limit": quota.get("limit"),
                 },
             )
-    
+
     # 檢查 email 是否已存在
     user = crud_user.get_by_email(db, email=user_in.email)
     if user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists"
+            detail="A user with this email already exists",
         )
-    
+
     user = crud_user.create(db, obj_in=user_in)
     return user
 
@@ -80,6 +80,7 @@ def create_user(
 # ═══════════════════════════════════════════
 #  個資法第 3 條 — 個人資料匯出
 # ═══════════════════════════════════════════
+
 
 @router.get("/me/export")
 def export_my_data(
@@ -113,49 +114,52 @@ def export_my_data(
     }
 
     # 對話與訊息
-    conversations = db.query(Conversation).filter(
-        Conversation.user_id == current_user.id
-    ).all()
+    conversations = db.query(Conversation).filter(Conversation.user_id == current_user.id).all()
     for conv in conversations:
-        messages = db.query(Message).filter(
-            Message.conversation_id == conv.id
-        ).order_by(Message.created_at).all()
-        user_data["conversations"].append({
-            "id": str(conv.id),
-            "created_at": conv.created_at.isoformat() if conv.created_at else None,
-            "messages": [
-                {
-                    "role": m.role,
-                    "content": m.content,
-                    "created_at": m.created_at.isoformat() if m.created_at else None,
-                }
-                for m in messages
-            ],
-        })
+        messages = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.created_at).all()
+        user_data["conversations"].append(
+            {
+                "id": str(conv.id),
+                "created_at": conv.created_at.isoformat() if conv.created_at else None,
+                "messages": [
+                    {
+                        "role": m.role,
+                        "content": m.content,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                    }
+                    for m in messages
+                ],
+            }
+        )
 
     # 使用紀錄
-    usage_records = db.query(UsageRecord).filter(
-        UsageRecord.user_id == current_user.id
-    ).order_by(UsageRecord.created_at.desc()).limit(1000).all()
+    usage_records = (
+        db.query(UsageRecord)
+        .filter(UsageRecord.user_id == current_user.id)
+        .order_by(UsageRecord.created_at.desc())
+        .limit(1000)
+        .all()
+    )
     for rec in usage_records:
-        user_data["usage_records"].append({
-            "action_type": rec.action_type,
-            "created_at": rec.created_at.isoformat() if rec.created_at else None,
-        })
+        user_data["usage_records"].append(
+            {
+                "action_type": rec.action_type,
+                "created_at": rec.created_at.isoformat() if rec.created_at else None,
+            }
+        )
 
     content = json.dumps(user_data, ensure_ascii=False, indent=2)
     return Response(
         content=content,
         media_type="application/json",
-        headers={
-            "Content-Disposition": f'attachment; filename="unihr-data-export-{current_user.id}.json"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="unihr-data-export-{current_user.id}.json"'},
     )
 
 
 # ═══════════════════════════════════════════
 #  個資法第 3 條 — 刪除個人資料
 # ═══════════════════════════════════════════
+
 
 class DeleteAccountRequest(BaseModel):
     password: str
@@ -180,6 +184,7 @@ def delete_my_account(
 
     # 驗證密碼
     from app.core.security import verify_password
+
     if not verify_password(body.password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -188,11 +193,15 @@ def delete_my_account(
 
     # 租戶唯一擁有者不能自刪
     if current_user.role == "owner":
-        owner_count = db.query(User).filter(
-            User.tenant_id == current_user.tenant_id,
-            User.role == "owner",
-            User.status == "active",
-        ).count()
+        owner_count = (
+            db.query(User)
+            .filter(
+                User.tenant_id == current_user.tenant_id,
+                User.role == "owner",
+                User.status == "active",
+            )
+            .count()
+        )
         if owner_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -207,18 +216,17 @@ def delete_my_account(
     db.query(UsageRecord).filter(UsageRecord.user_id == current_user.id).delete()
 
     # 刪除對話與訊息
-    conv_ids = [c.id for c in db.query(Conversation.id).filter(
-        Conversation.user_id == current_user.id
-    ).all()]
+    conv_ids = [c.id for c in db.query(Conversation.id).filter(Conversation.user_id == current_user.id).all()]
     if conv_ids:
         db.query(Message).filter(Message.conversation_id.in_(conv_ids)).delete(synchronize_session=False)
         db.query(Conversation).filter(Conversation.id.in_(conv_ids)).delete(synchronize_session=False)
 
     # 匿名化稽核日誌（保留紀錄但抹除身份）
     from app.models.audit import AuditLog
-    db.query(AuditLog).filter(
-        AuditLog.actor_user_id == current_user.id
-    ).update({"actor_user_id": None}, synchronize_session=False)
+
+    db.query(AuditLog).filter(AuditLog.actor_user_id == current_user.id).update(
+        {"actor_user_id": None}, synchronize_session=False
+    )
 
     # 寄送刪除確認信（best-effort）
     email = current_user.email
@@ -230,6 +238,7 @@ def delete_my_account(
 
     try:
         from app.services.email_service import send_account_deleted_email
+
         send_account_deleted_email(email, name)
     except Exception:
         pass

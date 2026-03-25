@@ -249,7 +249,7 @@ class PayrollSlip:
             idx = self.text.find(label)
             if idx < 0:
                 continue
-            snippet = self.text[idx:idx + window]
+            snippet = self.text[idx : idx + window]
             match = re.search(r"([0-9][0-9,]*)", snippet)
             if match:
                 return int(match.group(1).replace(",", ""))
@@ -282,7 +282,11 @@ class PayrollSlip:
             if name and amount:
                 items.append((name, amount))
         if not items:
-            for match in re.finditer(r"^([\u4e00-\u9fff\w]{2,})\s{2,}([0-9][0-9,]+)\s*$", section, re.MULTILINE):
+            for match in re.finditer(
+                r"^([\u4e00-\u9fff\w]{2,})\s{2,}([0-9][0-9,]+)\s*$",
+                section,
+                re.MULTILINE,
+            ):
                 name = match.group(1).strip()
                 amount = int(match.group(2).replace(",", ""))
                 if name and amount:
@@ -300,8 +304,7 @@ class PayrollSlip:
         if not section:
             return None
         amounts = [
-            int(m.group(1).replace(",", ""))
-            for m in re.finditer(r"\|\s*[^|\n]+\s*\|\s*([0-9][0-9,]*)\s*\|", section)
+            int(m.group(1).replace(",", "")) for m in re.finditer(r"\|\s*[^|\n]+\s*\|\s*([0-9][0-9,]*)\s*\|", section)
         ]
         return sum(amounts) if amounts else None
 
@@ -312,16 +315,35 @@ class PayrollSlip:
         return self._extract_amount_near(["應付總額", "應付總計", "應付小計"], window=300)
 
     def extract_net_pay(self) -> Optional[int]:
-        direct = self._extract_amount([
-            "實領", "實發", "實得", "實領金額", "實發金額", "實領薪資", "實領總額",
-            "實收金額", "員工實收",
-        ])
+        direct = self._extract_amount(
+            [
+                "實領",
+                "實發",
+                "實得",
+                "實領金額",
+                "實發金額",
+                "實領薪資",
+                "實領總額",
+                "實收金額",
+                "員工實收",
+            ]
+        )
         if direct is not None:
             return direct
-        direct = self._extract_amount_near([
-            "實領", "實發", "實得", "實領金額", "實發金額", "實領薪資", "實領總額",
-            "實收金額", "員工實收",
-        ], window=400)
+        direct = self._extract_amount_near(
+            [
+                "實領",
+                "實發",
+                "實得",
+                "實領金額",
+                "實發金額",
+                "實領薪資",
+                "實領總額",
+                "實收金額",
+                "員工實收",
+            ],
+            window=400,
+        )
         if direct is not None:
             return direct
         gross = self.extract_gross_total()
@@ -475,7 +497,10 @@ class LeaveForm:
         match = re.search(r"本次請假後特休剩餘[:：]?\s*(\d+)\s*天", self.text)
         if match:
             return int(match.group(1))
-        match = re.search(r"特別休假[:：]?(?:全年\s*)?\d+\s*天\s*\|\s*已用\s*\d+\s*天\s*\|\s*剩餘\s*(\d+)\s*天", self.text)
+        match = re.search(
+            r"特別休假[:：]?(?:全年\s*)?\d+\s*天\s*\|\s*已用\s*\d+\s*天\s*\|\s*剩餘\s*(\d+)\s*天",
+            self.text,
+        )
         if match:
             return int(match.group(1))
         return None
@@ -613,10 +638,7 @@ def try_structured_answer(
         emp_name = emp_name or hist_name
 
     if "交通津貼" in question or ("交通" in question and "津貼" in question):
-        answer = (
-            "公司提供交通津貼，依通勤距離補貼 500-2,000 元。"
-            "金額範圍依員工手冊規定辦理，實際補助以距離級距核定。"
-        )
+        answer = "公司提供交通津貼，依通勤距離補貼 500-2,000 元。金額範圍依員工手冊規定辦理，實際補助以距離級距核定。"
         source = _load_doc_source(tenant_id, "%員工手冊%", "交通津貼 500-2,000 元")
         return StructuredAnswer(answer=answer, sources=[source] if source else [])
 
@@ -639,8 +661,7 @@ def try_structured_answer(
 
     if "績效" in question and ("考核" in question or "評核" in question) and ("幾次" in question or "次" in question):
         answer = (
-            "公司績效考核一年 2 次，分別在 6 月與 12 月各進行一次。"
-            "此為公司內規規定的考核週期，詳見員工手冊相關章節。"
+            "公司績效考核一年 2 次，分別在 6 月與 12 月各進行一次。此為公司內規規定的考核週期，詳見員工手冊相關章節。"
         )
         source = _load_doc_source(tenant_id, "%員工手冊%", "考核週期：每年 6 月、12 月各考核一次")
         return StructuredAnswer(answer=answer, sources=[source] if source else [])
@@ -690,10 +711,7 @@ def try_structured_answer(
         source = _load_doc_source(tenant_id, "%勞動契約書%", "職業災害醫療期間不得終止契約")
         return StructuredAnswer(answer=answer, sources=[source] if source else [])
     if "離職" in question and "3" in question and "月" in question and "資遣費" in question:
-        answer = (
-            "自請離職無資遣費，公司要求提前 3 個月離職不符法定預告規定。"
-            "離職預告依年資為 10/20/30 天。"
-        )
+        answer = "自請離職無資遣費，公司要求提前 3 個月離職不符法定預告規定。離職預告依年資為 10/20/30 天。"
         source = _load_doc_source(tenant_id, "%勞動契約書%", "離職預告日數與資遣規定")
         return StructuredAnswer(answer=answer, sources=[source] if source else [])
 
@@ -727,10 +745,7 @@ def try_structured_answer(
         return StructuredAnswer(answer=answer, sources=sources)
 
     if "年資" in question and "3" in question and "離職" in question and "提前" in question:
-        answer = (
-            "年資 3 年的員工離職需提前 20 天通知，屬於 1 年以上未滿 3 年區間。"
-            "若達 3 年以上則為 30 天。"
-        )
+        answer = "年資 3 年的員工離職需提前 20 天通知，屬於 1 年以上未滿 3 年區間。若達 3 年以上則為 30 天。"
         source = _load_doc_source(tenant_id, "%勞動契約書%", "離職預告日數 10/20/30 天")
         return StructuredAnswer(answer=answer, sources=[source] if source else [])
 
@@ -753,12 +768,14 @@ def try_structured_answer(
                 )
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": reg.source_filename,
-                        "snippet": "公司統一編號",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": reg.source_filename,
+                            "snippet": "公司統一編號",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if ("健檢" in question or "健康檢查" in question) and "異常" in question:
@@ -772,12 +789,14 @@ def try_structured_answer(
             )
             return StructuredAnswer(
                 answer=answer,
-                sources=[{
-                    "type": "policy",
-                    "title": report.source_filename,
-                    "snippet": "檢查結果摘要",
-                    "score": 1.0,
-                }],
+                sources=[
+                    {
+                        "type": "policy",
+                        "title": report.source_filename,
+                        "snippet": "檢查結果摘要",
+                        "score": 1.0,
+                    }
+                ],
             )
 
     if ("醫生" in question or "醫師" in question) and "建議" in question:
@@ -788,12 +807,14 @@ def try_structured_answer(
                 answer = f"根據健檢報告中的醫師建議：\n{recs}"
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": report.source_filename,
-                        "snippet": "醫師建議",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": report.source_filename,
+                            "snippet": "醫師建議",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if "特休" in question and ("核准" in question or "誰核准" in question or "需要誰" in question):
@@ -806,12 +827,14 @@ def try_structured_answer(
             )
             return StructuredAnswer(
                 answer=answer,
-                sources=[{
-                    "type": "policy",
-                    "title": form.source_filename,
-                    "snippet": "核准流程（直屬主管、人資部門）",
-                    "score": 1.0,
-                }],
+                sources=[
+                    {
+                        "type": "policy",
+                        "title": form.source_filename,
+                        "snippet": "核准流程（直屬主管、人資部門）",
+                        "score": 1.0,
+                    }
+                ],
             )
 
     if "特休" in question and ("剩" in question or "還剩" in question or "剩餘" in question):
@@ -819,18 +842,17 @@ def try_structured_answer(
         if form:
             remaining = form.remaining_special_leave()
             if remaining is not None:
-                answer = (
-                    f"周秀蘭本次請假後特休剩餘 {remaining} 天。"
-                    "此數字以請假單上的『本次請假後特休剩餘』欄位為準。"
-                )
+                answer = f"周秀蘭本次請假後特休剩餘 {remaining} 天。此數字以請假單上的『本次請假後特休剩餘』欄位為準。"
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": form.source_filename,
-                        "snippet": "本次請假後特休剩餘",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": form.source_filename,
+                            "snippet": "本次請假後特休剩餘",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if "年資最深" in question or ("最深" in question and "年資" in question):
@@ -846,12 +868,14 @@ def try_structured_answer(
         )
         return StructuredAnswer(
             answer=answer,
-            sources=[{
-                "type": "policy",
-                "title": roster.source_filename,
-                "snippet": "員工名冊（年資欄位）",
-                "score": 1.0,
-            }],
+            sources=[
+                {
+                    "type": "policy",
+                    "title": roster.source_filename,
+                    "snippet": "員工名冊（年資欄位）",
+                    "score": 1.0,
+                }
+            ],
         )
 
     if ("特休" in question or "特別休假" in question) and "剩" not in question:
@@ -865,21 +889,22 @@ def try_structured_answer(
             days = _annual_leave_days(years)
             name = emp.get("姓名") or ""
             prefix = f"{emp.get('員工編號')} " if emp.get("員工編號") else ""
-            answer = (
-                f"{prefix}{name} 年資 {years:g} 年，特休為 {days} 天。"
-                "依公司年假表，5 年以上未滿 10 年為 15 天。"
-            )
+            answer = f"{prefix}{name} 年資 {years:g} 年，特休為 {days} 天。依公司年假表，5 年以上未滿 10 年為 15 天。"
             return StructuredAnswer(
                 answer=answer,
-                sources=[{
-                    "type": "policy",
-                    "title": roster.source_filename,
-                    "snippet": "員工名冊（年資欄位）",
-                    "score": 1.0,
-                }],
+                sources=[
+                    {
+                        "type": "policy",
+                        "title": roster.source_filename,
+                        "snippet": "員工名冊（年資欄位）",
+                        "score": 1.0,
+                    }
+                ],
             )
 
-    _has_severance_keyword = "資遣費" in question or ("資遣" in question and ("多少" in question or "計算" in question or "費" in question or emp_id or emp_name))
+    _has_severance_keyword = "資遣費" in question or (
+        "資遣" in question and ("多少" in question or "計算" in question or "費" in question or emp_id or emp_name)
+    )
     if _has_severance_keyword and (emp_id or emp_name):
         emp = roster.find_employee(emp_id=emp_id, name=emp_name)
         if emp:
@@ -897,12 +922,14 @@ def try_structured_answer(
                 )
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": roster.source_filename,
-                        "snippet": "員工名冊（年資、月薪欄位）",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": roster.source_filename,
+                            "snippet": "員工名冊（年資、月薪欄位）",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if "女性" in question and ("占比" in question or "比例" in question):
@@ -918,12 +945,14 @@ def try_structured_answer(
         )
         return StructuredAnswer(
             answer=answer,
-            sources=[{
-                "type": "policy",
-                "title": roster.source_filename,
-                "snippet": "員工名冊（性別欄位）",
-                "score": 1.0,
-            }],
+            sources=[
+                {
+                    "type": "policy",
+                    "title": roster.source_filename,
+                    "snippet": "員工名冊（性別欄位）",
+                    "score": 1.0,
+                }
+            ],
         )
 
     dept_match = re.search(r"([\u4e00-\u9fffA-Za-z]+)部", question)
@@ -938,12 +967,14 @@ def try_structured_answer(
         )
         return StructuredAnswer(
             answer=answer,
-            sources=[{
-                "type": "policy",
-                "title": roster.source_filename,
-                "snippet": f"員工名冊（{dept} 月薪欄位）",
-                "score": 1.0,
-            }],
+            sources=[
+                {
+                    "type": "policy",
+                    "title": roster.source_filename,
+                    "snippet": f"員工名冊（{dept} 月薪欄位）",
+                    "score": 1.0,
+                }
+            ],
         )
 
     if dept_match and ("幾位" in question or "人數" in question):
@@ -952,12 +983,14 @@ def try_structured_answer(
         answer = f"{dept}共有 {count} 位員工，統計自員工名冊部門欄位。"
         return StructuredAnswer(
             answer=answer,
-            sources=[{
-                "type": "policy",
-                "title": roster.source_filename,
-                "snippet": f"員工名冊（{dept} 部門欄位）",
-                "score": 1.0,
-            }],
+            sources=[
+                {
+                    "type": "policy",
+                    "title": roster.source_filename,
+                    "snippet": f"員工名冊（{dept} 部門欄位）",
+                    "score": 1.0,
+                }
+            ],
         )
 
     if "加班" in question and "月薪" in question and ("小時" in question or "時" in question):
@@ -1010,7 +1043,12 @@ def try_structured_answer(
         sources = [source] if source else []
         return StructuredAnswer(answer=answer, sources=sources)
 
-    if (emp_id or emp_name) and ("部門" in question or "薪水" in question or "薪資" in question or "月薪" in question or "職稱" in question) and "實領" not in question and "加班費" not in question:
+    if (
+        (emp_id or emp_name)
+        and ("部門" in question or "薪水" in question or "薪資" in question or "月薪" in question or "職稱" in question)
+        and "實領" not in question
+        and "加班費" not in question
+    ):
         emp = roster.find_employee(emp_id=emp_id, name=emp_name)
         if emp:
             name = emp.get("姓名", "")
@@ -1025,12 +1063,14 @@ def try_structured_answer(
             answer = "，".join(parts) + "。"
             return StructuredAnswer(
                 answer=answer,
-                sources=[{
-                    "type": "policy",
-                    "title": roster.source_filename,
-                    "snippet": "員工名冊（員工基本資料）",
-                    "score": 1.0,
-                }],
+                sources=[
+                    {
+                        "type": "policy",
+                        "title": roster.source_filename,
+                        "snippet": "員工名冊（員工基本資料）",
+                        "score": 1.0,
+                    }
+                ],
             )
 
     if "加班費" in question and ("多少" in question or "領" in question):
@@ -1048,12 +1088,14 @@ def try_structured_answer(
                 answer = "，".join(parts) + "，依薪資條明細計算。"
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": slip.source_filename,
-                        "snippet": "加班費明細",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": slip.source_filename,
+                            "snippet": "加班費明細",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if "實領" in question and ("薪" in question or "薪水" in question or "薪資" in question):
@@ -1073,12 +1115,14 @@ def try_structured_answer(
                 answer = "".join(parts)
                 return StructuredAnswer(
                     answer=answer,
-                    sources=[{
-                        "type": "policy",
-                        "title": slip.source_filename,
-                        "snippet": "薪資明細（實領/應付/應扣）",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": slip.source_filename,
+                            "snippet": "薪資明細（實領/應付/應扣）",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     if history and "資遣費" in question and "離職" not in question:
@@ -1125,12 +1169,14 @@ def try_structured_answer(
                     parts.append(f"投保薪資 {ins_salary:,} 元，依 20% 自付比例計算。")
                 return StructuredAnswer(
                     answer="".join(parts),
-                    sources=[{
-                        "type": "policy",
-                        "title": slip.source_filename,
-                        "snippet": f"勞保費自付 {ins_amount:,} 元",
-                        "score": 1.0,
-                    }],
+                    sources=[
+                        {
+                            "type": "policy",
+                            "title": slip.source_filename,
+                            "snippet": f"勞保費自付 {ins_amount:,} 元",
+                            "score": 1.0,
+                        }
+                    ],
                 )
 
     logger.info("structured_answers: no handler matched for q=%s", question[:80])

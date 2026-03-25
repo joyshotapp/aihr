@@ -1,5 +1,25 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, tenants, users, documents, kb, chat, audit, departments, admin, sso, feature_flags, tenant_admin, analytics, public, custom_domains, subscription, regions, billing, payment
+from app.api.v1.endpoints import (
+    auth,
+    tenants,
+    users,
+    documents,
+    kb,
+    chat,
+    audit,
+    departments,
+    admin,
+    sso,
+    feature_flags,
+    tenant_admin,
+    analytics,
+    public,
+    custom_domains,
+    subscription,
+    regions,
+    billing,
+    payment,
+)
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["login"])

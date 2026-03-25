@@ -1,12 +1,11 @@
 import os
-import io
 import re
 import tempfile
 import hashlib
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional
+from typing import Dict, List
 from uuid import UUID
 import boto3
 from pinecone import Pinecone
@@ -30,6 +29,7 @@ def _set_progress(document_id: str, pct: int, detail: str = ""):
     try:
         from app.core.redis_client import get_redis_client
         import json
+
         r = get_redis_client()
         if r:
             key = f"doc_progress:{document_id}"
@@ -37,8 +37,14 @@ def _set_progress(document_id: str, pct: int, detail: str = ""):
     except Exception:
         pass  # best-effort, ?????????
 
-# ???? Metrics placeholders (monitoring integration removed) ????
+
+# Metrics placeholders (monitoring integration removed)
 _PROM = False
+CELERY_QUEUE_ACTIVE = None
+CELERY_TASKS_TOTAL = None
+DOCUMENT_PARSE_DURATION = None
+DOCUMENT_EMBED_DURATION = None
+DOCUMENT_STORE_DURATION = None
 
 
 def _extract_section_title(chunk_text: str) -> str:
@@ -69,6 +75,7 @@ def _pinecone_index():
 # Stage 1 ??Parse: download + parse + chunk
 # ????????????????????????????????????????????????????????????????????????????????????????????
 
+
 @celery_app.task(
     bind=True,
     name="app.tasks.document_tasks.parse_document_task",
@@ -81,15 +88,13 @@ def _pinecone_index():
 def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) -> Dict:
     """
     Stage 1?????????? ?????
-    ??? dict ??embed_document_task ?????    """
+    ??? dict ??embed_document_task ?????"""
     db = None
     if _PROM:
         CELERY_QUEUE_ACTIVE.labels(stage="parse").inc()
     try:
         db = create_session(tenant_id=tenant_id)
-        doc = crud_document.get_for_tenant(
-            db, document_id=UUID(document_id), tenant_id=UUID(tenant_id)
-        )
+        doc = crud_document.get_for_tenant(db, document_id=UUID(document_id), tenant_id=UUID(tenant_id))
         if not doc:
             raise ValueError("Document not found")
 
@@ -107,7 +112,8 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
             text_content, metadata = DocumentParser.parse(tmp_path, doc.file_type)
         except Exception as e:
             crud_document.update(
-                db, db_obj=doc,
+                db,
+                db_obj=doc,
                 obj_in=DocumentUpdate(status="failed", error_message=f"??????: {e}"),
             )
             if _PROM:
@@ -134,12 +140,15 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
                 chunk_overlap=settings.CHUNK_OVERLAP,
             )
 
-        # ?????????????????? metadata??        from app.services.chunk_templates import detect_template
+        # detect template for chunk metadata
+        from app.services.chunk_templates import detect_template
+
         tmpl = detect_template(text_content)
         template_name = tmpl.name if tmpl else "generic"
 
         # ???? Langfuse: ???????????? ????
         from app.services.langfuse_client import get_langfuse
+
         lf = get_langfuse()
         if lf:
             lf.generation(
@@ -154,7 +163,8 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
 
         if not chunks:
             crud_document.update(
-                db, db_obj=doc,
+                db,
+                db_obj=doc,
                 obj_in=DocumentUpdate(status="failed", error_message="???????????????"),
             )
             if _PROM:
@@ -162,7 +172,8 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
             return {"status": "failed", "error": "No valid chunks"}
 
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(status="embedding", chunk_count=len(chunks)),
         )
 
@@ -203,6 +214,7 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
 # Stage 2 ??Embed: Voyage API with circuit breaker
 # ????????????????????????????????????????????????????????????????????????????????????????????
 
+
 @celery_app.task(
     bind=True,
     name="app.tasks.document_tasks.embed_document_task",
@@ -214,7 +226,7 @@ def parse_document_task(self, document_id: str, file_path: str, tenant_id: str) 
 )
 def embed_document_task(self, parse_result: Dict) -> Dict:
     """
-    Stage 2???????????? Voyage API + circuit breaker??    ??? parse_document_task ???????    """
+    Stage 2???????????? Voyage API + circuit breaker??    ??? parse_document_task ???????"""
     if parse_result.get("status") == "failed":
         return parse_result  # ??????
 
@@ -242,7 +254,7 @@ def embed_document_task(self, parse_result: Dict) -> Dict:
         for i in range(0, len(enriched_chunks), batch_size):
             batch_idx = i // batch_size
             pct = 35 + int(50 * batch_idx / total_batches)
-            _set_progress(document_id, pct, f"?????? {batch_idx+1}/{total_batches}")
+            _set_progress(document_id, pct, f"?????? {batch_idx + 1}/{total_batches}")
             batch = enriched_chunks[i : i + batch_size]
             last_err = None
             for attempt in range(3):
@@ -260,9 +272,11 @@ def embed_document_task(self, parse_result: Dict) -> Dict:
                     last_err = e
                     logger.warning(
                         "Voyage embed batch %d attempt %d/3 failed: %s",
-                        i // batch_size, attempt + 1, e,
+                        i // batch_size,
+                        attempt + 1,
+                        e,
                     )
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
 
             if last_err is not None:
                 # ??? chunk ???
@@ -282,7 +296,7 @@ def embed_document_task(self, parse_result: Dict) -> Dict:
                             break
                         except Exception as e:
                             chunk_err = e
-                            time.sleep(2 ** attempt)
+                            time.sleep(2**attempt)
                     if chunk_err is not None:
                         logger.error("Chunk %d permanently failed, using zero vector", i + j)
                         dim = len(all_embeddings[0]) if all_embeddings else settings.EMBEDDING_DIMENSION
@@ -296,6 +310,7 @@ def embed_document_task(self, parse_result: Dict) -> Dict:
 
         # ???? Langfuse: ?????? embedding token ??????
         from app.services.langfuse_client import get_langfuse
+
         lf = get_langfuse()
         if lf:
             lf.generation(
@@ -346,9 +361,8 @@ def embed_document_task(self, parse_result: Dict) -> Dict:
 # Stage 3 ??Store: Pinecone (parallel) + PostgreSQL
 # ????????????????????????????????????????????????????????????????????????????????????????????
 
-def _upsert_pinecone_batch(
-    pinecone_index, vectors: List[dict], namespace: str, batch_idx: int
-) -> None:
+
+def _upsert_pinecone_batch(pinecone_index, vectors: List[dict], namespace: str, batch_idx: int) -> None:
     """????Pinecone batch upsert??? circuit breaker + retry??"""
     last_err = None
     for attempt in range(3):
@@ -363,9 +377,11 @@ def _upsert_pinecone_batch(
             last_err = e
             logger.warning(
                 "Pinecone upsert batch %d attempt %d/3 failed: %s",
-                batch_idx, attempt + 1, e,
+                batch_idx,
+                attempt + 1,
+                e,
             )
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     if last_err is not None:
         raise last_err
 
@@ -381,7 +397,7 @@ def _upsert_pinecone_batch(
 )
 def store_document_task(self, embed_result: Dict) -> Dict:
     """
-    Stage 3?????Pinecone?????P2?? PostgreSQL + ?????????    """
+    Stage 3?????Pinecone?????P2?? PostgreSQL + ?????????"""
     if embed_result.get("status") == "failed":
         return embed_result
 
@@ -399,19 +415,15 @@ def store_document_task(self, embed_result: Dict) -> Dict:
         CELERY_QUEUE_ACTIVE.labels(stage="store").inc()
     try:
         db = create_session(tenant_id=tenant_id)
-        doc = crud_document.get_for_tenant(
-            db, document_id=UUID(document_id), tenant_id=UUID(tenant_id)
-        )
+        doc = crud_document.get_for_tenant(db, document_id=UUID(document_id), tenant_id=UUID(tenant_id))
         if not doc:
             raise ValueError("Document not found")
 
         # Store chunks
         from app.models.document import DocumentChunk as DChunk
+
         existing_hashes = {
-            row[0]
-            for row in db.query(DChunk.chunk_hash)
-            .filter(DChunk.document_id == UUID(document_id))
-            .all()
+            row[0] for row in db.query(DChunk.chunk_hash).filter(DChunk.document_id == UUID(document_id)).all()
         }
 
         vectors_to_upsert: List[dict] = []
@@ -427,25 +439,28 @@ def store_document_task(self, embed_result: Dict) -> Dict:
                 skipped += 1
                 continue
 
-            # ?????????embedding ?????chunk??            is_zero_vector = all(v == 0.0 for v in embedding)
+            # check if embedding is zero vector (embedding API failure)
+            is_zero_vector = all(v == 0.0 for v in embedding)
 
             vector_id = f"{document_id}-chunk-{idx}"
 
             # ????????? Pinecone???????????????
             if not is_zero_vector:
-                vectors_to_upsert.append({
-                    "id": vector_id,
-                    "values": embedding,
-                    "metadata": {
-                        "tenant_id": tenant_id,
-                        "document_id": document_id,
-                        "filename": filename,
-                        "chunk_index": idx,
-                        "text": chunk,
-                        "section_title": _extract_section_title(chunk),
-                        "parse_engine": metadata.get("parse_engine", "native"),
-                    },
-                })
+                vectors_to_upsert.append(
+                    {
+                        "id": vector_id,
+                        "values": embedding,
+                        "metadata": {
+                            "tenant_id": tenant_id,
+                            "document_id": document_id,
+                            "filename": filename,
+                            "chunk_index": idx,
+                            "text": chunk,
+                            "section_title": _extract_section_title(chunk),
+                            "parse_engine": metadata.get("parse_engine", "native"),
+                        },
+                    }
+                )
             else:
                 zero_vec_count += 1
 
@@ -461,39 +476,37 @@ def store_document_task(self, embed_result: Dict) -> Dict:
             if is_zero_vector:
                 chunk_meta["embedding_failed"] = True
 
-            chunk_rows.append(DChunk(
-                document_id=UUID(document_id),
-                tenant_id=UUID(tenant_id),
-                chunk_index=idx,
-                text=chunk,
-                chunk_hash=chunk_hash,
-                vector_id=vector_id,
-                embedding=None if is_zero_vector else embedding,
-                metadata_json=chunk_meta,
-            ))
+            chunk_rows.append(
+                DChunk(
+                    document_id=UUID(document_id),
+                    tenant_id=UUID(tenant_id),
+                    chunk_index=idx,
+                    text=chunk,
+                    chunk_hash=chunk_hash,
+                    vector_id=vector_id,
+                    embedding=None if is_zero_vector else embedding,
+                    metadata_json=chunk_meta,
+                )
+            )
             inserted += 1
 
         if zero_vec_count:
             logger.warning(
                 "??? %s: %d chunk(s) ????????????????????Pinecone ???",
-                document_id, zero_vec_count,
+                document_id,
+                zero_vec_count,
             )
 
         _set_progress(document_id, 90, "Uploading to vector store")
         # P2: Parallel Pinecone upsert with ThreadPoolExecutor
         upsert_batch = 100
         pinecone_index = _pinecone_index()
-        batches = [
-            vectors_to_upsert[i : i + upsert_batch]
-            for i in range(0, len(vectors_to_upsert), upsert_batch)
-        ]
+        batches = [vectors_to_upsert[i : i + upsert_batch] for i in range(0, len(vectors_to_upsert), upsert_batch)]
 
         max_workers = min(len(batches), 4) if batches else 1
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(
-                    _upsert_pinecone_batch, pinecone_index, batch, namespace, bi
-                ): bi
+                executor.submit(_upsert_pinecone_batch, pinecone_index, batch, namespace, bi): bi
                 for bi, batch in enumerate(batches)
             }
             for future in as_completed(futures):
@@ -513,7 +526,8 @@ def store_document_task(self, embed_result: Dict) -> Dict:
 
         _set_progress(document_id, 100, "??????")
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(
                 status="completed",
                 chunk_count=inserted,
@@ -524,6 +538,7 @@ def store_document_task(self, embed_result: Dict) -> Dict:
         # ????????????
         try:
             from app.services.kb_retrieval import KnowledgeBaseRetriever
+
             retriever = KnowledgeBaseRetriever()
             retriever.invalidate_cache(UUID(tenant_id))
         except Exception:
@@ -565,6 +580,7 @@ def store_document_task(self, embed_result: Dict) -> Dict:
 # Orchestrator ??backwards-compatible entry point
 # ????????????????????????????????????????????????????????????????????????????????????????????
 
+
 @celery_app.task(
     bind=True,
     name="app.tasks.document_tasks.process_document_task",
@@ -577,7 +593,7 @@ def store_document_task(self, embed_result: Dict) -> Dict:
 )
 def process_document_task(self, document_id: str, file_path: str, tenant_id: str):
     """
-    ??????????????? parse ??embed ??store ????    ?????? .delay() ????????????????????    """
+    ??????????????? parse ??embed ??store ????    ?????? .delay() ????????????????????"""
     task_chain = celery_chain(
         parse_document_task.s(document_id, file_path, tenant_id),
         embed_document_task.s(),
@@ -591,6 +607,7 @@ def process_document_task(self, document_id: str, file_path: str, tenant_id: str
 # Helper
 # ????????????????????????????????????????????????????????????????????????????????????????????
 
+
 def _mark_failed(db, document_id: str, message: str):
     """?????????????????"""
     if db is None:
@@ -599,7 +616,8 @@ def _mark_failed(db, document_id: str, message: str):
         doc = crud_document.get(db, document_id=UUID(document_id), _internal=True)
         if doc:
             crud_document.update(
-                db, db_obj=doc,
+                db,
+                db_obj=doc,
                 obj_in=DocumentUpdate(status="failed", error_message=message),
             )
     except Exception:
@@ -609,6 +627,7 @@ def _mark_failed(db, document_id: str, message: str):
 # ????????????????????????????????????????????????????????????????????????????????????????????
 # URL Task (unchanged, standalone)
 # ????????????????????????????????????????????????????????????????????????????????????????????
+
 
 @celery_app.task(
     bind=True,
@@ -631,14 +650,13 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
 
     try:
         db = create_session(tenant_id=tenant_id)
-        doc = crud_document.get_for_tenant(
-            db, document_id=UUID(document_id), tenant_id=UUID(tenant_id)
-        )
+        doc = crud_document.get_for_tenant(db, document_id=UUID(document_id), tenant_id=UUID(tenant_id))
         if not doc:
             raise ValueError("Document not found")
 
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(status="parsing"),
         )
 
@@ -647,13 +665,15 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
             text_content, metadata = DocumentParser.parse_url(url)
         except Exception as e:
             crud_document.update(
-                db, db_obj=doc,
+                db,
+                db_obj=doc,
                 obj_in=DocumentUpdate(status="failed", error_message=f"?????????: {e}"),
             )
             return {"status": "failed", "error": str(e)}
 
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(quality_report=metadata),
         )
 
@@ -666,13 +686,15 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
 
         if not chunks:
             crud_document.update(
-                db, db_obj=doc,
+                db,
+                db_obj=doc,
                 obj_in=DocumentUpdate(status="failed", error_message="??????????????????"),
             )
             return {"status": "failed", "error": "No valid chunks from URL"}
 
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(status="embedding", chunk_count=len(chunks)),
         )
 
@@ -685,7 +707,7 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
         all_embeddings = []
 
         for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
+            batch = chunks[i : i + batch_size]
             last_err = None
             for attempt in range(3):
                 try:
@@ -702,14 +724,17 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
                     last_err = e
                     logger.warning(
                         "Voyage embed batch %d attempt %d/3 failed: %s",
-                        i // batch_size, attempt + 1, e,
+                        i // batch_size,
+                        attempt + 1,
+                        e,
                     )
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
             if last_err is not None:
                 raise last_err
             time.sleep(0.5)
 
-        # 4. ??? pgvector????????        from app.models.document import DocumentChunk as DChunk
+        # 4. store to pgvector
+        from app.models.document import DocumentChunk as DChunk
 
         inserted = 0
         for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
@@ -747,7 +772,8 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
         db.commit()
 
         crud_document.update(
-            db, db_obj=doc,
+            db,
+            db_obj=doc,
             obj_in=DocumentUpdate(
                 status="completed",
                 chunk_count=inserted,
@@ -758,6 +784,7 @@ def process_url_task(self, document_id: str, url: str, tenant_id: str):
         # ??????
         try:
             from app.services.kb_retrieval import KnowledgeBaseRetriever
+
             retriever = KnowledgeBaseRetriever()
             retriever.invalidate_cache(UUID(tenant_id))
         except Exception:

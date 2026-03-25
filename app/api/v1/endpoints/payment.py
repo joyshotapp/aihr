@@ -12,6 +12,7 @@ Flow:
   3. NewebPay POSTs encrypted result to /payment/notify
   4. We verify, decrypt, activate plan, create BillingRecord
 """
+
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -35,6 +36,7 @@ logger = logging.getLogger("unihr.payment")
 
 # ── Schemas ──
 
+
 class CheckoutRequestBody(BaseModel):
     target_plan: str  # "pro" or "enterprise"
 
@@ -46,6 +48,7 @@ class CheckoutResponse(BaseModel):
 
 
 # ── Checkout endpoint ──
+
 
 @router.post("/checkout", response_model=CheckoutResponse)
 def create_checkout(
@@ -81,19 +84,25 @@ def create_checkout(
     amount = plan_config["price_monthly_twd"]  # TWD amount
 
     from app.services.payment_provider import CheckoutRequest
+
     provider = get_payment_provider()
-    result = provider.create_checkout(CheckoutRequest(
-        tenant_id=str(tenant.id),
-        plan=body.target_plan,
-        amount=amount,
-        currency="TWD",
-        description=f"UniHR {plan_config['display_name']} 方案月費",
-        email=current_user.email or "",
-    ))
+    result = provider.create_checkout(
+        CheckoutRequest(
+            tenant_id=str(tenant.id),
+            plan=body.target_plan,
+            amount=amount,
+            currency="TWD",
+            description=f"UniHR {plan_config['display_name']} 方案月費",
+            email=current_user.email or "",
+        )
+    )
 
     logger.info(
         "Checkout created: tenant=%s plan=%s amount=%d trade_no=%s",
-        tenant.id, body.target_plan, amount, result.trade_no,
+        tenant.id,
+        body.target_plan,
+        amount,
+        result.trade_no,
     )
 
     return CheckoutResponse(
@@ -104,6 +113,7 @@ def create_checkout(
 
 
 # ── Webhook (NotifyURL) ──
+
 
 @router.post("/notify")
 async def payment_notify(request: Request, db: Session = Depends(deps.get_db)):
@@ -126,7 +136,10 @@ async def payment_notify(request: Request, db: Session = Depends(deps.get_db)):
 
     logger.info(
         "Payment event: type=%s trade_no=%s amount=%d tenant=%s",
-        event.event_type, event.trade_no, event.amount, event.tenant_id,
+        event.event_type,
+        event.trade_no,
+        event.amount,
+        event.tenant_id,
     )
 
     if event.event_type == "payment.success":
@@ -140,6 +153,7 @@ async def payment_notify(request: Request, db: Session = Depends(deps.get_db)):
 
 # ── Return URL (user redirect after payment) ──
 
+
 @router.post("/return")
 async def payment_return(request: Request):
     """Handle NewebPay ReturnURL — user redirect after payment.
@@ -150,6 +164,7 @@ async def payment_return(request: Request):
 
 
 # ── Internal handlers ──
+
 
 def _handle_payment_success(db: Session, event):
     """Activate plan and create billing record on successful payment."""
@@ -168,9 +183,7 @@ def _handle_payment_success(db: Session, event):
         return
 
     # Avoid duplicates
-    existing = db.query(BillingRecord).filter(
-        BillingRecord.external_id == event.gateway_trade_no
-    ).first()
+    existing = db.query(BillingRecord).filter(BillingRecord.external_id == event.gateway_trade_no).first()
     if existing:
         logger.debug("Duplicate notification for %s, skipping", event.gateway_trade_no)
         return
@@ -210,7 +223,11 @@ def _handle_payment_success(db: Session, event):
 
     logger.info(
         "Tenant %s upgraded via NewebPay: %s → %s (amount=%d TWD, trade=%s)",
-        tenant.id, old_plan, event.plan, event.amount, event.gateway_trade_no,
+        tenant.id,
+        old_plan,
+        event.plan,
+        event.amount,
+        event.gateway_trade_no,
     )
 
 
@@ -218,7 +235,9 @@ def _handle_payment_failed(db: Session, event):
     """Log payment failure and create failed billing record for tracking."""
     logger.warning(
         "Payment failed: tenant=%s plan=%s trade=%s",
-        event.tenant_id, event.plan, event.trade_no,
+        event.tenant_id,
+        event.plan,
+        event.trade_no,
     )
 
     if not event.tenant_id:

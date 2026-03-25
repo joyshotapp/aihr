@@ -23,15 +23,11 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
-) -> str:
+def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -148,8 +144,8 @@ def _generate_totp(secret: str, for_time: Optional[int] = None) -> str:
     message = struct.pack(">Q", counter)
     digest = hmac.new(key, message, hashlib.sha1).digest()
     offset = digest[-1] & 0x0F
-    code = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
-    otp = code % (10 ** settings.MFA_TOTP_DIGITS)
+    code = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    otp = code % (10**settings.MFA_TOTP_DIGITS)
     return str(otp).zfill(settings.MFA_TOTP_DIGITS)
 
 

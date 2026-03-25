@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 # Configurable deprecation date (set to empty string to disable)
 V1_DEPRECATION_DATE = ""  # e.g. "2026-12-31"
-V1_SUNSET_DATE = ""       # e.g. "2027-06-30"
+V1_SUNSET_DATE = ""  # e.g. "2027-06-30"
 
 
 class APIVersionMiddleware(BaseHTTPMiddleware):
@@ -27,9 +27,7 @@ class APIVersionMiddleware(BaseHTTPMiddleware):
                 response.headers["Sunset"] = V1_SUNSET_DATE
             response.headers["X-API-Version"] = "v1"
             response.headers["X-API-Upgrade"] = (
-                "This API version will be deprecated. "
-                "Please migrate to /api/v2. "
-                "See /api/versions for details."
+                "This API version will be deprecated. Please migrate to /api/v2. See /api/versions for details."
             )
         elif path.startswith("/api/v2"):
             response.headers["X-API-Version"] = "v2"

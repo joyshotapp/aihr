@@ -10,7 +10,8 @@ from app.models.feedback import ChatFeedback
 def get_conversation(db: Session, conversation_id: UUID) -> Optional[Conversation]:
     warnings.warn(
         "crud_chat.get_conversation() has no tenant_id filter. Use get_conversation_for_user() instead.",
-        DeprecationWarning, stacklevel=2,
+        DeprecationWarning,
+        stacklevel=2,
     )
     return db.query(Conversation).filter(Conversation.id == conversation_id).first()
 
@@ -21,56 +22,40 @@ def get_conversation_for_user(
     user_id: UUID,
     tenant_id: UUID,
 ) -> Optional[Conversation]:
-    return db.query(Conversation).filter(
-        Conversation.id == conversation_id,
-        Conversation.user_id == user_id,
-        Conversation.tenant_id == tenant_id,
-    ).first()
+    return (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+            Conversation.tenant_id == tenant_id,
+        )
+        .first()
+    )
 
 
 def get_user_conversations(
-    db: Session,
-    user_id: UUID,
-    tenant_id: UUID,
-    skip: int = 0,
-    limit: int = 100
+    db: Session, user_id: UUID, tenant_id: UUID, skip: int = 0, limit: int = 100
 ) -> List[Conversation]:
-    return db.query(Conversation).filter(
-        Conversation.user_id == user_id,
-        Conversation.tenant_id == tenant_id
-    ).order_by(Conversation.created_at.desc()).offset(skip).limit(limit).all()
-
-
-def create_conversation(
-    db: Session,
-    *,
-    user_id: UUID,
-    tenant_id: UUID,
-    title: str = "新對話"
-) -> Conversation:
-    db_obj = Conversation(
-        user_id=user_id,
-        tenant_id=tenant_id,
-        title=title
+    return (
+        db.query(Conversation)
+        .filter(Conversation.user_id == user_id, Conversation.tenant_id == tenant_id)
+        .order_by(Conversation.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
     )
+
+
+def create_conversation(db: Session, *, user_id: UUID, tenant_id: UUID, title: str = "新對話") -> Conversation:
+    db_obj = Conversation(user_id=user_id, tenant_id=tenant_id, title=title)
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
     return db_obj
 
 
-def create_message(
-    db: Session,
-    *,
-    conversation_id: UUID,
-    role: str,
-    content: str
-) -> Message:
-    db_obj = Message(
-        conversation_id=conversation_id,
-        role=role,
-        content=content
-    )
+def create_message(db: Session, *, conversation_id: UUID, role: str, content: str) -> Message:
+    db_obj = Message(conversation_id=conversation_id, role=role, content=content)
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -83,9 +68,9 @@ def get_message_by_id(db: Session, message_id: UUID) -> Optional[Message]:
     WARNING: No tenant filter. Use get_message_by_id_for_user() for API endpoints.
     """
     warnings.warn(
-        "crud_chat.get_message_by_id() has no tenant_id filter. "
-        "Use get_message_by_id_for_user() instead.",
-        DeprecationWarning, stacklevel=2,
+        "crud_chat.get_message_by_id() has no tenant_id filter. Use get_message_by_id_for_user() instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
     return db.query(Message).filter(Message.id == message_id).first()
 
@@ -117,29 +102,37 @@ def get_conversation_messages(
     skip: int = 0,
     limit: int = 100,
 ) -> List[Message]:
-    q = db.query(Message).join(
-        Conversation, Message.conversation_id == Conversation.id
-    ).filter(Message.conversation_id == conversation_id)
+    q = (
+        db.query(Message)
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .filter(Message.conversation_id == conversation_id)
+    )
     if tenant_id is not None:
         q = q.filter(Conversation.tenant_id == tenant_id)
     else:
         warnings.warn(
             "crud_chat.get_conversation_messages() called without tenant_id.",
-            DeprecationWarning, stacklevel=2,
+            DeprecationWarning,
+            stacklevel=2,
         )
     return q.order_by(Message.created_at).offset(skip).limit(limit).all()
 
 
 def delete_conversation(db: Session, conversation_id: UUID, *, tenant_id: UUID = None) -> bool:
     if tenant_id is not None:
-        conv = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.tenant_id == tenant_id,
-        ).first()
+        conv = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.tenant_id == tenant_id,
+            )
+            .first()
+        )
     else:
         warnings.warn(
             "crud_chat.delete_conversation() called without tenant_id.",
-            DeprecationWarning, stacklevel=2,
+            DeprecationWarning,
+            stacklevel=2,
         )
         conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if conv:
@@ -173,6 +166,7 @@ def delete_conversation_for_user(
 
 # ──────────── T7-1: RetrievalTrace ────────────
 
+
 def create_retrieval_trace(
     db: Session,
     *,
@@ -198,6 +192,7 @@ def create_retrieval_trace(
 
 # ──────────── T7-5: Feedback ────────────
 
+
 def upsert_feedback(
     db: Session,
     *,
@@ -209,10 +204,14 @@ def upsert_feedback(
     comment: str = None,
 ) -> ChatFeedback:
     """新增或更新回饋（同一使用者同一訊息只能一筆）。"""
-    existing = db.query(ChatFeedback).filter(
-        ChatFeedback.user_id == user_id,
-        ChatFeedback.message_id == message_id,
-    ).first()
+    existing = (
+        db.query(ChatFeedback)
+        .filter(
+            ChatFeedback.user_id == user_id,
+            ChatFeedback.message_id == message_id,
+        )
+        .first()
+    )
 
     if existing:
         existing.rating = rating
@@ -238,9 +237,7 @@ def upsert_feedback(
 
 def get_feedback_stats(db: Session, tenant_id: UUID, since=None) -> Dict[str, Any]:
     """取得回饋統計。since 如提供則只統計該日期後的資料。"""
-    q = db.query(func.count(ChatFeedback.id)).filter(
-        ChatFeedback.tenant_id == tenant_id
-    )
+    q = db.query(func.count(ChatFeedback.id)).filter(ChatFeedback.tenant_id == tenant_id)
     if since:
         q = q.filter(ChatFeedback.created_at >= since)
     total = q.scalar() or 0
@@ -256,12 +253,9 @@ def get_feedback_stats(db: Session, tenant_id: UUID, since=None) -> Dict[str, An
     negative = total - positive
 
     # 差評原因分佈
-    cat_q = (
-        db.query(ChatFeedback.category, func.count(ChatFeedback.id))
-        .filter(
-            ChatFeedback.tenant_id == tenant_id,
-            ChatFeedback.rating == 1,
-        )
+    cat_q = db.query(ChatFeedback.category, func.count(ChatFeedback.id)).filter(
+        ChatFeedback.tenant_id == tenant_id,
+        ChatFeedback.rating == 1,
     )
     if since:
         cat_q = cat_q.filter(ChatFeedback.created_at >= since)
@@ -278,6 +272,7 @@ def get_feedback_stats(db: Session, tenant_id: UUID, since=None) -> Dict[str, An
 
 
 # ──────────── T7-13: 對話搜尋 ────────────
+
 
 def search_messages(
     db: Session,
@@ -314,6 +309,7 @@ def search_messages(
 
 # ──────────── T7-12: RAG 品質儀表板 ────────────
 
+
 def get_rag_dashboard(db: Session, tenant_id: UUID, days: int = 30) -> Dict[str, Any]:
     """取得 RAG 品質儀表板統計資料。"""
     from datetime import datetime, timedelta
@@ -321,10 +317,15 @@ def get_rag_dashboard(db: Session, tenant_id: UUID, days: int = 30) -> Dict[str,
     since = datetime.utcnow() - timedelta(days=days)
 
     # 1. 對話總量
-    total_conversations = db.query(func.count(Conversation.id)).filter(
-        Conversation.tenant_id == tenant_id,
-        Conversation.created_at >= since,
-    ).scalar() or 0
+    total_conversations = (
+        db.query(func.count(Conversation.id))
+        .filter(
+            Conversation.tenant_id == tenant_id,
+            Conversation.created_at >= since,
+        )
+        .scalar()
+        or 0
+    )
 
     # 2. 訊息總量
     total_messages = (
@@ -368,9 +369,7 @@ def get_rag_dashboard(db: Session, tenant_id: UUID, days: int = 30) -> Dict[str,
         .order_by(cast(Conversation.created_at, Date))
         .all()
     )
-    daily_conversations = [
-        {"date": str(row.date), "count": row.count} for row in daily_rows
-    ]
+    daily_conversations = [{"date": str(row.date), "count": row.count} for row in daily_rows]
 
     # 6. 回饋統計（同步對齊 days 範圍）
     feedback = get_feedback_stats(db, tenant_id, since=since)

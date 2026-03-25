@@ -5,12 +5,14 @@ from sqlalchemy.orm import relationship
 import enum
 from app.db.base_class import Base
 
+
 class UserRole(str, enum.Enum):
     OWNER = "owner"
     ADMIN = "admin"
     HR = "hr"
     EMPLOYEE = "employee"
     VIEWER = "viewer"
+
 
 class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
@@ -23,7 +25,7 @@ class User(Base):
     mfa_enabled = Column(Boolean, default=False, nullable=False)
     mfa_secret = Column(String(64), nullable=True)
     mfa_enabled_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Email verification
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verified_at = Column(DateTime(timezone=True), nullable=True)
@@ -31,10 +33,10 @@ class User(Base):
     # PDPA consent
     agreed_to_terms = Column(Boolean, default=False, nullable=False)
     agreed_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True, index=True)
-    
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -45,5 +47,6 @@ class User(Base):
     @property
     def is_active(self):
         return self.status == "active"
+
     conversations = relationship("Conversation", back_populates="user")
     usage_records = relationship("UsageRecord", back_populates="user")

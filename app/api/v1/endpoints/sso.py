@@ -88,7 +88,11 @@ def _b64url_decode(raw: str) -> bytes:
 
 def _sign_state(payload: dict) -> str:
     message = _b64url_encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
-    sig = hmac.new(settings.SECRET_KEY.encode("utf-8"), msg=message.encode("ascii"), digestmod=hashlib.sha256).digest()
+    sig = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        msg=message.encode("ascii"),
+        digestmod=hashlib.sha256,
+    ).digest()
     return f"{message}.{_b64url_encode(sig)}"
 
 
@@ -125,23 +129,33 @@ async def _exchange_google(
     code_verifier: str,
 ) -> dict:
     async with httpx.AsyncClient() as client:
-        resp = await client.post(GOOGLE_TOKEN_URL, data={
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code",
-            "code_verifier": code_verifier,
-        })
+        resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+                "code_verifier": code_verifier,
+            },
+        )
         if resp.status_code != 200:
             raise HTTPException(status_code=400, detail=f"Google token exchange failed: {resp.text}")
         tokens = resp.json()
 
-        resp2 = await client.get(GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {tokens['access_token']}"})
+        resp2 = await client.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
         if resp2.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to fetch Google user info")
         info = resp2.json()
-        return {"email": info["email"], "name": info.get("name", ""), "provider": "google"}
+        return {
+            "email": info["email"],
+            "name": info.get("name", ""),
+            "provider": "google",
+        }
 
 
 async def _exchange_microsoft(
@@ -152,30 +166,41 @@ async def _exchange_microsoft(
     code_verifier: str,
 ) -> dict:
     async with httpx.AsyncClient() as client:
-        resp = await client.post(MICROSOFT_TOKEN_URL, data={
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code",
-            "scope": "openid profile email User.Read",
-            "code_verifier": code_verifier,
-        })
+        resp = await client.post(
+            MICROSOFT_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+                "scope": "openid profile email User.Read",
+                "code_verifier": code_verifier,
+            },
+        )
         if resp.status_code != 200:
             raise HTTPException(status_code=400, detail=f"Microsoft token exchange failed: {resp.text}")
         tokens = resp.json()
 
-        resp2 = await client.get(MICROSOFT_USERINFO_URL, headers={"Authorization": f"Bearer {tokens['access_token']}"})
+        resp2 = await client.get(
+            MICROSOFT_USERINFO_URL,
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
         if resp2.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to fetch Microsoft user info")
         info = resp2.json()
         email = info.get("mail") or info.get("userPrincipalName", "")
-        return {"email": email, "name": info.get("displayName", ""), "provider": "microsoft"}
+        return {
+            "email": email,
+            "name": info.get("displayName", ""),
+            "provider": "microsoft",
+        }
 
 
 # ═══════════════════════════════════════════════════
 # Public: discover enabled providers for a tenant
 # ═══════════════════════════════════════════════════
+
 
 @router.get("/sso/providers/{tenant_id}", response_model=List[SSOConfigPublic])
 def list_sso_providers(
@@ -183,11 +208,7 @@ def list_sso_providers(
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """Return enabled SSO providers for a tenant (no secrets)."""
-    configs = (
-        db.query(TenantSSOConfig)
-        .filter(TenantSSOConfig.tenant_id == tenant_id, TenantSSOConfig.enabled)
-        .all()
-    )
+    configs = db.query(TenantSSOConfig).filter(TenantSSOConfig.tenant_id == tenant_id, TenantSSOConfig.enabled).all()
     return configs
 
 
@@ -272,6 +293,7 @@ def create_sso_state(
 # Public: OAuth callback (frontend → backend code exchange)
 # ═══════════════════════════════════════════════════
 
+
 @router.post("/sso/callback", response_model=Token)
 async def sso_callback(
     body: OAuthCallbackRequest,
@@ -298,7 +320,10 @@ async def sso_callback(
         .first()
     )
     if not sso_cfg:
-        raise HTTPException(status_code=400, detail=f"SSO provider '{body.provider}' is not enabled for this tenant")
+        raise HTTPException(
+            status_code=400,
+            detail=f"SSO provider '{body.provider}' is not enabled for this tenant",
+        )
 
     # Verify OAuth state token
     state_payload = _verify_state(body.state)
@@ -341,7 +366,10 @@ async def sso_callback(
     if sso_cfg.allowed_domains:
         domain = email.split("@")[-1]
         if domain not in sso_cfg.allowed_domains:
-            raise HTTPException(status_code=403, detail=f"Email domain '{domain}' is not allowed for this tenant")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Email domain '{domain}' is not allowed for this tenant",
+            )
 
     # 4. Find or create user
     user = crud_user.get_by_email(db, email=email)
@@ -357,6 +385,7 @@ async def sso_callback(
         # Create user with a random unusable password
         import secrets
         from app.schemas.user import UserCreate
+
         user_in = UserCreate(
             email=email,
             password=secrets.token_urlsafe(32),
@@ -372,6 +401,7 @@ async def sso_callback(
     refresh_token, jti = security.create_refresh_token(user.email)
 
     from app.core.redis_client import get_redis_client
+
     rc = get_redis_client()
     if rc:
         rc.setex(f"refresh:{jti}", settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400, user.email)
@@ -386,6 +416,7 @@ async def sso_callback(
 # ═══════════════════════════════════════════════════
 # Admin: manage per-tenant SSO configs (owner/admin only)
 # ═══════════════════════════════════════════════════
+
 
 @router.post("/sso/config", response_model=SSOConfigRead)
 def create_sso_config(
@@ -405,7 +436,14 @@ def create_sso_config(
     )
     if existing:
         # update in-place
-        for field in ("client_id", "client_secret", "enabled", "allowed_domains", "auto_create_user", "default_role"):
+        for field in (
+            "client_id",
+            "client_secret",
+            "enabled",
+            "allowed_domains",
+            "auto_create_user",
+            "default_role",
+        ):
             setattr(existing, field, getattr(body, field))
         db.commit()
         db.refresh(existing)
@@ -433,11 +471,7 @@ def list_sso_configs(
     current_user: User = Depends(require_admin),
 ) -> Any:
     """List SSO configs for current tenant (owner/admin only)."""
-    configs = (
-        db.query(TenantSSOConfig)
-        .filter(TenantSSOConfig.tenant_id == current_user.tenant_id)
-        .all()
-    )
+    configs = db.query(TenantSSOConfig).filter(TenantSSOConfig.tenant_id == current_user.tenant_id).all()
     return configs
 
 

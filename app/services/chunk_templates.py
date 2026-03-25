@@ -26,14 +26,15 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ChunkTemplate:
     """單一文件類型的切片模板"""
-    name: str                                # 模板名稱（用於追蹤）
-    detect_patterns: List[Pattern]           # 偵測此文件類型的 regex
-    detect_threshold: int                    # 至少命中幾個 pattern 才判定
-    section_patterns: List[Pattern]          # 章節邊界 regex（依優先序）
+
+    name: str  # 模板名稱（用於追蹤）
+    detect_patterns: List[Pattern]  # 偵測此文件類型的 regex
+    detect_threshold: int  # 至少命中幾個 pattern 才判定
+    section_patterns: List[Pattern]  # 章節邊界 regex（依優先序）
     atomic_patterns: List[Pattern] = field(default_factory=list)  # 不可拆分區塊
-    min_section_tokens: int = 80             # 章節最小 token 數
-    merge_undersized: bool = True            # 是否合併過小章節
-    priority: int = 0                        # 優先級（結構型 > 主題型）
+    min_section_tokens: int = 80  # 章節最小 token 數
+    merge_undersized: bool = True  # 是否合併過小章節
+    priority: int = 0  # 優先級（結構型 > 主題型）
 
 
 # ── 預定義模板 ──
@@ -47,9 +48,9 @@ _HANDBOOK_TEMPLATE = ChunkTemplate(
     detect_threshold=2,
     priority=10,  # 結構型模板優先：有「第X章」就是手冊
     section_patterns=[
-        re.compile(r"(?:^|\n)(?=第[一二三四五六七八九十百]+章)"),     # 第X章
-        re.compile(r"(?:^|\n)(?=第[一二三四五六七八九十百\d]+條)"),   # 第X條
-        re.compile(r"(?:^|\n)(?=#{1,3}\s)"),                          # Markdown 標題
+        re.compile(r"(?:^|\n)(?=第[一二三四五六七八九十百]+章)"),  # 第X章
+        re.compile(r"(?:^|\n)(?=第[一二三四五六七八九十百\d]+條)"),  # 第X條
+        re.compile(r"(?:^|\n)(?=#{1,3}\s)"),  # Markdown 標題
     ],
     atomic_patterns=[
         re.compile(r"第[一二三四五六七八九十百\d]+條[^\n]*\n[\s\S]*?(?=第[一二三四五六七八九十百\d]+條|\Z)"),
@@ -66,7 +67,9 @@ _LEAVE_POLICY_TEMPLATE = ChunkTemplate(
     detect_threshold=3,
     section_patterns=[
         re.compile(r"(?:^|\n)(?=(?:一|二|三|四|五|六|七|八|九|十)[、.])"),  # 一、二、...
-        re.compile(r"(?:^|\n)(?=(?:特休|婚假|喪假|病假|產假|陪產假|陪產檢假|生理假|公假|事假|家庭照顧假|育嬰留職停薪))"),
+        re.compile(
+            r"(?:^|\n)(?=(?:特休|婚假|喪假|病假|產假|陪產假|陪產檢假|生理假|公假|事假|家庭照顧假|育嬰留職停薪))"
+        ),
         re.compile(r"(?:^|\n)(?=#{1,3}\s)"),
         re.compile(r"(?:^|\n)(?=第[一二三四五六七八九十百\d]+條)"),
     ],
@@ -126,7 +129,7 @@ TEMPLATES: List[ChunkTemplate] = [
     _LEAVE_POLICY_TEMPLATE,
     _SALARY_TEMPLATE,
     _PERFORMANCE_TEMPLATE,
-    _HANDBOOK_TEMPLATE,      # 員工手冊放後面，因 detect_threshold 較低
+    _HANDBOOK_TEMPLATE,  # 員工手冊放後面，因 detect_threshold 較低
     _LEGAL_CONTRACT_TEMPLATE,
 ]
 
@@ -182,7 +185,9 @@ def split_by_template(
         if len(non_empty) >= 2:
             logger.debug(
                 "模板 %s 使用 pattern %s 切出 %d 段",
-                template.name, pattern.pattern, len(non_empty),
+                template.name,
+                pattern.pattern,
+                len(non_empty),
             )
             return non_empty
 

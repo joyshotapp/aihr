@@ -27,7 +27,7 @@ def scan_bytes(data: bytes, filename: str = "upload") -> None:
             sock.sendall(b"zINSTREAM\0")
             chunk_size = 1024 * 1024
             for start in range(0, len(data), chunk_size):
-                chunk = data[start:start + chunk_size]
+                chunk = data[start : start + chunk_size]
                 sock.sendall(struct.pack(">I", len(chunk)))
                 sock.sendall(chunk)
             sock.sendall(struct.pack(">I", 0))
@@ -44,9 +44,7 @@ def scan_bytes(data: bytes, filename: str = "upload") -> None:
             signature = decoded.split(":", 1)[-1].replace("FOUND", "").strip()
             raise MalwareDetectedError(signature or "malware")
         if not decoded.endswith("OK"):
-            raise FileScanError(
-                f"Unexpected ClamAV response for {filename}: {decoded or 'empty response'}"
-            )
+            raise FileScanError(f"Unexpected ClamAV response for {filename}: {decoded or 'empty response'}")
     except MalwareDetectedError:
         raise
     except Exception as exc:

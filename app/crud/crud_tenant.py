@@ -32,8 +32,12 @@ def create(db: Session, *, obj_in: TenantCreate) -> Tenant:
         max_users=obj_in.max_users if obj_in.max_users is not None else defaults.get("max_users"),
         max_documents=obj_in.max_documents if obj_in.max_documents is not None else defaults.get("max_documents"),
         max_storage_mb=obj_in.max_storage_mb if obj_in.max_storage_mb is not None else defaults.get("max_storage_mb"),
-        monthly_query_limit=obj_in.monthly_query_limit if obj_in.monthly_query_limit is not None else defaults.get("monthly_query_limit"),
-        monthly_token_limit=obj_in.monthly_token_limit if obj_in.monthly_token_limit is not None else defaults.get("monthly_token_limit"),
+        monthly_query_limit=obj_in.monthly_query_limit
+        if obj_in.monthly_query_limit is not None
+        else defaults.get("monthly_query_limit"),
+        monthly_token_limit=obj_in.monthly_token_limit
+        if obj_in.monthly_token_limit is not None
+        else defaults.get("monthly_token_limit"),
         quota_alert_threshold=obj_in.quota_alert_threshold if obj_in.quota_alert_threshold is not None else 0.8,
         quota_alert_email=obj_in.quota_alert_email,
     )
@@ -57,6 +61,7 @@ def update(db: Session, *, db_obj: Tenant, obj_in: TenantUpdate) -> Tenant:
 #  Quota 查詢與檢查
 # ═══════════════════════════════════════════
 
+
 def _month_start() -> datetime:
     """取得當月第一天"""
     now = datetime.utcnow()
@@ -67,24 +72,24 @@ def get_current_usage(db: Session, tenant_id: UUID) -> Dict[str, Any]:
     """取得租戶目前使用量"""
     month_start = _month_start()
 
-    user_count = db.query(func.count(User.id)).filter(
-        User.tenant_id == tenant_id, User.status == "active"
-    ).scalar() or 0
+    user_count = (
+        db.query(func.count(User.id)).filter(User.tenant_id == tenant_id, User.status == "active").scalar() or 0
+    )
 
-    doc_count = db.query(func.count(Document.id)).filter(
-        Document.tenant_id == tenant_id
-    ).scalar() or 0
+    doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
 
     # 月度查詢次數和 token 數
-    monthly = db.query(
-        func.count(UsageRecord.id).label("queries"),
-        func.coalesce(
-            func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0
-        ).label("tokens"),
-    ).filter(
-        UsageRecord.tenant_id == tenant_id,
-        UsageRecord.created_at >= month_start,
-    ).first()
+    monthly = (
+        db.query(
+            func.count(UsageRecord.id).label("queries"),
+            func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
+        )
+        .filter(
+            UsageRecord.tenant_id == tenant_id,
+            UsageRecord.created_at >= month_start,
+        )
+        .first()
+    )
 
     return {
         "current_users": user_count,
@@ -135,7 +140,7 @@ def get_quota_status(db: Session, tenant_id: UUID) -> Dict[str, Any]:
             is_over = True
             warnings.append(f"{label}已超過配額上限 ({limit})")
         elif ratio >= threshold:
-            warnings.append(f"{label}已達配額 {int(ratio*100)}%（上限 {limit}）")
+            warnings.append(f"{label}已達配額 {int(ratio * 100)}%（上限 {limit}）")
 
     return {
         "tenant_id": str(tenant_id),
@@ -172,8 +177,16 @@ def check_quota(db: Session, tenant_id: UUID, resource: str) -> Dict[str, Any]:
     checks = {
         "user": (usage["current_users"], tenant.max_users, "使用者數量"),
         "document": (usage["current_documents"], tenant.max_documents, "文件數量"),
-        "query": (usage["current_monthly_queries"], tenant.monthly_query_limit, "月查詢次數"),
-        "token": (usage["current_monthly_tokens"], tenant.monthly_token_limit, "月 Token 量"),
+        "query": (
+            usage["current_monthly_queries"],
+            tenant.monthly_query_limit,
+            "月查詢次數",
+        ),
+        "token": (
+            usage["current_monthly_tokens"],
+            tenant.monthly_token_limit,
+            "月 Token 量",
+        ),
     }
 
     if resource not in checks:
@@ -181,7 +194,12 @@ def check_quota(db: Session, tenant_id: UUID, resource: str) -> Dict[str, Any]:
 
     current, limit, label = checks[resource]
     if limit is None:
-        return {"allowed": True, "message": f"{label}無上限", "current": current, "limit": None}
+        return {
+            "allowed": True,
+            "message": f"{label}無上限",
+            "current": current,
+            "limit": None,
+        }
     if current >= limit:
         return {
             "allowed": False,

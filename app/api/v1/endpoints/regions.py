@@ -30,6 +30,7 @@ router = APIRouter()
 #  Schemas
 # ═══════════════════════════════════════════
 
+
 class RegionInfo(BaseModel):
     code: str
     name: str
@@ -64,6 +65,7 @@ class DataResidencyReport(BaseModel):
 # ═══════════════════════════════════════════
 #  Endpoints
 # ═══════════════════════════════════════════
+
 
 @router.get("/", response_model=List[RegionInfo])
 async def list_regions():
@@ -136,8 +138,7 @@ async def update_tenant_region(
     if body.region not in SUPPORTED_REGIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported region: {body.region}. "
-                   f"Supported: {', '.join(SUPPORTED_REGIONS)}",
+            detail=f"Unsupported region: {body.region}. Supported: {', '.join(SUPPORTED_REGIONS)}",
         )
 
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -218,13 +219,15 @@ async def get_compliance_summary(
     summary = []
     for region_code, count in region_counts:
         config = get_region_config(region_code or DEFAULT_REGION)
-        summary.append({
-            "region": region_code or DEFAULT_REGION,
-            "region_name": config.name,
-            "tenant_count": count,
-            "data_residency": config.data_residency,
-            "compliance_notes": config.compliance_notes,
-        })
+        summary.append(
+            {
+                "region": region_code or DEFAULT_REGION,
+                "region_name": config.name,
+                "tenant_count": count,
+                "data_residency": config.data_residency,
+                "compliance_notes": config.compliance_notes,
+            }
+        )
 
     return {
         "total_tenants": sum(item["tenant_count"] for item in summary),

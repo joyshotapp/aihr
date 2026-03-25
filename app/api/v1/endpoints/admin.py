@@ -2,6 +2,7 @@
 平台管理後台 API（Superuser 專用）
 提供跨租戶管理、平台統計、系統健康監控等功能
 """
+
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -29,6 +30,7 @@ router = APIRouter()
 #  Response Schemas
 # ═══════════════════════════════════════════
 
+
 class TenantSummary(BaseModel):
     id: str
     name: str
@@ -52,7 +54,7 @@ class PlatformDashboard(BaseModel):
     total_cost: float
     # 近 7 天趨勢
     daily_actions: list  # [{date, count, cost}]
-    top_tenants: list    # [{name, actions, cost}]
+    top_tenants: list  # [{name, actions, cost}]
 
 
 class TenantDetailStats(BaseModel):
@@ -70,8 +72,8 @@ class TenantDetailStats(BaseModel):
     total_embedding_calls: int
     total_cost: float
     total_actions: int
-    recent_actions: list    # last 10 audit logs
-    users: list             # user list
+    recent_actions: list  # last 10 audit logs
+    users: list  # user list
 
 
 class AdminUserInfo(BaseModel):
@@ -87,7 +89,7 @@ class AdminUserInfo(BaseModel):
 
 
 class SystemHealth(BaseModel):
-    status: str   # healthy / degraded
+    status: str  # healthy / degraded
     database: str
     redis: str
     uptime_seconds: float
@@ -98,6 +100,7 @@ class SystemHealth(BaseModel):
 # ═══════════════════════════════════════════
 #  Platform Dashboard
 # ═══════════════════════════════════════════
+
 
 @router.get("/dashboard", response_model=PlatformDashboard)
 def platform_dashboard(
@@ -135,10 +138,7 @@ def platform_dashboard(
         .order_by(func.date(UsageRecord.created_at))
         .all()
     )
-    daily_actions = [
-        {"date": str(r.date), "count": r.count, "cost": float(r.cost)}
-        for r in daily_rows
-    ]
+    daily_actions = [{"date": str(r.date), "count": r.count, "cost": float(r.cost)} for r in daily_rows]
 
     # Top 5 tenants by cost
     top_rows = (
@@ -153,10 +153,7 @@ def platform_dashboard(
         .limit(5)
         .all()
     )
-    top_tenants = [
-        {"name": r.name, "actions": r.actions, "cost": float(r.cost)}
-        for r in top_rows
-    ]
+    top_tenants = [{"name": r.name, "actions": r.actions, "cost": float(r.cost)} for r in top_rows]
 
     return PlatformDashboard(
         total_tenants=total_tenants,
@@ -176,6 +173,7 @@ def platform_dashboard(
 #  Tenant Management
 # ═══════════════════════════════════════════
 
+
 @router.get("/tenants", response_model=List[TenantSummary])
 def list_all_tenants(
     status: Optional[str] = None,
@@ -187,15 +185,9 @@ def list_all_tenants(
 ) -> Any:
     """全租戶列表（含用量摘要）"""
     # Subqueries to avoid N+1 (was: 3 queries per tenant in a loop)
-    user_counts = (
-        db.query(User.tenant_id, func.count(User.id).label("cnt"))
-        .group_by(User.tenant_id)
-        .subquery()
-    )
+    user_counts = db.query(User.tenant_id, func.count(User.id).label("cnt")).group_by(User.tenant_id).subquery()
     doc_counts = (
-        db.query(Document.tenant_id, func.count(Document.id).label("cnt"))
-        .group_by(Document.tenant_id)
-        .subquery()
+        db.query(Document.tenant_id, func.count(Document.id).label("cnt")).group_by(Document.tenant_id).subquery()
     )
     usage_agg = (
         db.query(
@@ -228,17 +220,19 @@ def list_all_tenants(
 
     result = []
     for t, user_count, doc_count, total_actions, total_cost in rows:
-        result.append(TenantSummary(
-            id=str(t.id),
-            name=t.name,
-            plan=t.plan,
-            status=t.status,
-            created_at=t.created_at,
-            user_count=user_count,
-            document_count=doc_count,
-            total_actions=total_actions,
-            total_cost=float(total_cost),
-        ))
+        result.append(
+            TenantSummary(
+                id=str(t.id),
+                name=t.name,
+                plan=t.plan,
+                status=t.status,
+                created_at=t.created_at,
+                user_count=user_count,
+                document_count=doc_count,
+                total_actions=total_actions,
+                total_cost=float(total_cost),
+            )
+        )
     return result
 
 
@@ -257,22 +251,22 @@ def tenant_detail_stats(
     doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == tenant_id).scalar() or 0
     conv_count = db.query(func.count(Conversation.id)).filter(Conversation.tenant_id == tenant_id).scalar() or 0
 
-    usage_agg = db.query(
-        func.count(UsageRecord.id).label("total_actions"),
-        func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
-        func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
-        func.coalesce(func.sum(UsageRecord.pinecone_queries), 0).label("pinecone_queries"),
-        func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
-        func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("total_cost"),
-    ).filter(UsageRecord.tenant_id == tenant_id).first()
+    usage_agg = (
+        db.query(
+            func.count(UsageRecord.id).label("total_actions"),
+            func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
+            func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
+            func.coalesce(func.sum(UsageRecord.pinecone_queries), 0).label("pinecone_queries"),
+            func.coalesce(func.sum(UsageRecord.embedding_calls), 0).label("embedding_calls"),
+            func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("total_cost"),
+        )
+        .filter(UsageRecord.tenant_id == tenant_id)
+        .first()
+    )
 
     # Recent audit logs
     recent_logs = (
-        db.query(AuditLog)
-        .filter(AuditLog.tenant_id == tenant_id)
-        .order_by(AuditLog.created_at.desc())
-        .limit(10)
-        .all()
+        db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id).order_by(AuditLog.created_at.desc()).limit(10).all()
     )
     recent_actions = [
         {
@@ -341,6 +335,7 @@ def update_tenant_admin(
 #  Cross-tenant User Search
 # ═══════════════════════════════════════════
 
+
 @router.get("/users", response_model=List[AdminUserInfo])
 def search_users(
     search: Optional[str] = None,
@@ -359,9 +354,7 @@ def search_users(
         joinedload(User.department),
     )
     if search:
-        q = q.filter(
-            (User.email.ilike(f"%{search}%")) | (User.full_name.ilike(f"%{search}%"))
-        )
+        q = q.filter((User.email.ilike(f"%{search}%")) | (User.full_name.ilike(f"%{search}%")))
     if role:
         q = q.filter(User.role == role)
     if tenant_id:
@@ -371,23 +364,26 @@ def search_users(
 
     result = []
     for u in users:
-        result.append(AdminUserInfo(
-            id=str(u.id),
-            email=u.email,
-            full_name=u.full_name,
-            role=u.role,
-            status=u.status,
-            tenant_id=str(u.tenant_id),
-            tenant_name=u.tenant.name if u.tenant else None,
-            department_name=u.department.name if u.department else None,
-            created_at=u.created_at,
-        ))
+        result.append(
+            AdminUserInfo(
+                id=str(u.id),
+                email=u.email,
+                full_name=u.full_name,
+                role=u.role,
+                status=u.status,
+                tenant_id=str(u.tenant_id),
+                tenant_name=u.tenant.name if u.tenant else None,
+                department_name=u.department.name if u.department else None,
+                created_at=u.created_at,
+            )
+        )
     return result
 
 
 # ═══════════════════════════════════════════
 #  System Health
 # ═══════════════════════════════════════════
+
 
 @router.get("/system/health", response_model=SystemHealth)
 def system_health(
@@ -412,6 +408,7 @@ def system_health(
     redis_status = "healthy"
     try:
         from app.config import settings
+
         r = redis_lib.Redis.from_url(settings.CELERY_BROKER_URL)
         r.ping()
         r.close()
@@ -433,6 +430,7 @@ def system_health(
 # ═══════════════════════════════════════════
 #  Quota Management
 # ═══════════════════════════════════════════
+
 
 @router.get("/tenants/{tenant_id}/quota", response_model=QuotaStatus)
 def get_tenant_quota(
@@ -512,9 +510,7 @@ def get_tenant_alerts(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    alerts = QuotaAlertService.get_alerts(
-        db, tenant_id, alert_type=alert_type, limit=limit
-    )
+    alerts = QuotaAlertService.get_alerts(db, tenant_id, alert_type=alert_type, limit=limit)
     return [
         {
             "id": str(a.id),
@@ -562,6 +558,7 @@ def list_plan_quotas(
 #  Security Isolation Config
 # ═══════════════════════════════════════════
 
+
 @router.get("/tenants/{tenant_id}/security")
 def get_tenant_security(
     tenant_id: UUID,
@@ -570,8 +567,10 @@ def get_tenant_security(
 ) -> Any:
     """查看租戶安全組態"""
     from app.services.security_isolation import (
-        get_security_config, SecurityConfigResponse
+        get_security_config,
+        SecurityConfigResponse,
     )
+
     tenant = crud_tenant.get(db, tenant_id=tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -608,6 +607,7 @@ def update_tenant_security(
         SecurityConfigUpdate,
         SecurityConfigResponse,
     )
+
     tenant = crud_tenant.get(db, tenant_id=tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")

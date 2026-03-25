@@ -2,6 +2,7 @@
 成本分析進階 API（T3-5）
 提供圖表化趨勢、異常偵測、預算預警
 """
+
 from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -24,6 +25,7 @@ router = APIRouter()
 # ═══════════════════════════════════════════
 #  Response Schemas
 # ═══════════════════════════════════════════
+
 
 class DailyUsage(BaseModel):
     date: str
@@ -68,6 +70,7 @@ class BudgetAlert(BaseModel):
 #  Daily Usage Trend（圖表用）
 # ═══════════════════════════════════════════
 
+
 @router.get("/trends/daily", response_model=List[DailyUsage])
 def daily_usage_trend(
     tenant_id: Optional[UUID] = None,
@@ -85,20 +88,14 @@ def daily_usage_trend(
         func.count(UsageRecord.id).label("queries"),
         func.coalesce(func.sum(UsageRecord.input_tokens), 0).label("input_tokens"),
         func.coalesce(func.sum(UsageRecord.output_tokens), 0).label("output_tokens"),
-        func.coalesce(
-            func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0
-        ).label("total_tokens"),
+        func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("total_tokens"),
         func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
     ).filter(UsageRecord.created_at >= start)
 
     if tenant_id:
         q = q.filter(UsageRecord.tenant_id == tenant_id)
 
-    rows = (
-        q.group_by(cast(UsageRecord.created_at, Date))
-        .order_by(cast(UsageRecord.created_at, Date))
-        .all()
-    )
+    rows = q.group_by(cast(UsageRecord.created_at, Date)).order_by(cast(UsageRecord.created_at, Date)).all()
 
     return [
         DailyUsage(
@@ -116,6 +113,7 @@ def daily_usage_trend(
 # ═══════════════════════════════════════════
 #  Monthly Tenant Cost Ranking
 # ═══════════════════════════════════════════
+
 
 @router.get("/trends/monthly-by-tenant", response_model=List[TenantCostSummary])
 def monthly_cost_by_tenant(
@@ -142,9 +140,7 @@ def monthly_cost_by_tenant(
             Tenant.name,
             Tenant.plan,
             func.count(UsageRecord.id).label("queries"),
-            func.coalesce(
-                func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0
-            ).label("tokens"),
+            func.coalesce(func.sum(UsageRecord.input_tokens + UsageRecord.output_tokens), 0).label("tokens"),
             func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0).label("cost"),
         )
         .outerjoin(
@@ -163,21 +159,24 @@ def monthly_cost_by_tenant(
         queries = r.queries or 0
         cost = float(r.cost or 0)
         avg = round(cost / queries, 6) if queries > 0 else 0.0
-        result.append(TenantCostSummary(
-            tenant_id=str(r.id),
-            tenant_name=r.name,
-            plan=r.plan,
-            total_cost=round(cost, 6),
-            total_queries=queries,
-            total_tokens=int(r.tokens or 0),
-            avg_cost_per_query=avg,
-        ))
+        result.append(
+            TenantCostSummary(
+                tenant_id=str(r.id),
+                tenant_name=r.name,
+                plan=r.plan,
+                total_cost=round(cost, 6),
+                total_queries=queries,
+                total_tokens=int(r.tokens or 0),
+                avg_cost_per_query=avg,
+            )
+        )
     return result
 
 
 # ═══════════════════════════════════════════
 #  Anomaly Detection
 # ═══════════════════════════════════════════
+
 
 @router.get("/anomalies", response_model=List[CostAnomaly])
 def detect_anomalies(
@@ -237,29 +236,33 @@ def detect_anomalies(
         if bl.daily_queries > 0:
             ratio = float(r.daily_queries) / float(bl.daily_queries)
             if ratio >= threshold_ratio:
-                anomalies.append(CostAnomaly(
-                    tenant_id=tid,
-                    tenant_name=name,
-                    metric="daily_queries",
-                    current_value=round(float(r.daily_queries), 2),
-                    average_value=round(float(bl.daily_queries), 2),
-                    deviation_ratio=round(ratio, 2),
-                    message=f"日均查詢量異常增加 {ratio:.1f} 倍",
-                ))
+                anomalies.append(
+                    CostAnomaly(
+                        tenant_id=tid,
+                        tenant_name=name,
+                        metric="daily_queries",
+                        current_value=round(float(r.daily_queries), 2),
+                        average_value=round(float(bl.daily_queries), 2),
+                        deviation_ratio=round(ratio, 2),
+                        message=f"日均查詢量異常增加 {ratio:.1f} 倍",
+                    )
+                )
 
         # 成本異常
         if bl.daily_cost > 0:
             ratio = float(r.daily_cost) / float(bl.daily_cost)
             if ratio >= threshold_ratio:
-                anomalies.append(CostAnomaly(
-                    tenant_id=tid,
-                    tenant_name=name,
-                    metric="daily_cost",
-                    current_value=round(float(r.daily_cost), 6),
-                    average_value=round(float(bl.daily_cost), 6),
-                    deviation_ratio=round(ratio, 2),
-                    message=f"日均成本異常增加 {ratio:.1f} 倍",
-                ))
+                anomalies.append(
+                    CostAnomaly(
+                        tenant_id=tid,
+                        tenant_name=name,
+                        metric="daily_cost",
+                        current_value=round(float(r.daily_cost), 6),
+                        average_value=round(float(bl.daily_cost), 6),
+                        deviation_ratio=round(ratio, 2),
+                        message=f"日均成本異常增加 {ratio:.1f} 倍",
+                    )
+                )
 
     return anomalies
 
@@ -267,6 +270,7 @@ def detect_anomalies(
 # ═══════════════════════════════════════════
 #  Budget Alerts（預算預警）
 # ═══════════════════════════════════════════
+
 
 @router.get("/budget-alerts", response_model=List[BudgetAlert])
 def budget_alerts(
@@ -285,10 +289,25 @@ def budget_alerts(
             continue
 
         ratio_keys = {
-            "queries": ("queries_usage_ratio", "monthly_query_limit", "current_monthly_queries", "月查詢次數"),
-            "tokens": ("tokens_usage_ratio", "monthly_token_limit", "current_monthly_tokens", "月 Token 量"),
+            "queries": (
+                "queries_usage_ratio",
+                "monthly_query_limit",
+                "current_monthly_queries",
+                "月查詢次數",
+            ),
+            "tokens": (
+                "tokens_usage_ratio",
+                "monthly_token_limit",
+                "current_monthly_tokens",
+                "月 Token 量",
+            ),
             "users": ("users_usage_ratio", "max_users", "current_users", "使用者數量"),
-            "documents": ("documents_usage_ratio", "max_documents", "current_documents", "文件數量"),
+            "documents": (
+                "documents_usage_ratio",
+                "max_documents",
+                "current_documents",
+                "文件數量",
+            ),
         }
 
         threshold = status_data.get("quota_alert_threshold", 0.8)
@@ -298,25 +317,29 @@ def budget_alerts(
             if ratio is None:
                 continue
             if ratio >= 1.0:
-                alerts.append(BudgetAlert(
-                    tenant_id=str(tenant.id),
-                    tenant_name=tenant.name,
-                    resource=resource,
-                    current=status_data.get(current_key, 0),
-                    limit=status_data.get(limit_key),
-                    usage_ratio=ratio,
-                    alert_type="exceeded",
-                ))
+                alerts.append(
+                    BudgetAlert(
+                        tenant_id=str(tenant.id),
+                        tenant_name=tenant.name,
+                        resource=resource,
+                        current=status_data.get(current_key, 0),
+                        limit=status_data.get(limit_key),
+                        usage_ratio=ratio,
+                        alert_type="exceeded",
+                    )
+                )
             elif ratio >= threshold:
-                alerts.append(BudgetAlert(
-                    tenant_id=str(tenant.id),
-                    tenant_name=tenant.name,
-                    resource=resource,
-                    current=status_data.get(current_key, 0),
-                    limit=status_data.get(limit_key),
-                    usage_ratio=ratio,
-                    alert_type="warning",
-                ))
+                alerts.append(
+                    BudgetAlert(
+                        tenant_id=str(tenant.id),
+                        tenant_name=tenant.name,
+                        resource=resource,
+                        current=status_data.get(current_key, 0),
+                        limit=status_data.get(limit_key),
+                        usage_ratio=ratio,
+                        alert_type="warning",
+                    )
+                )
 
     # 依嚴重程度排序
     alerts.sort(key=lambda a: (0 if a.alert_type == "exceeded" else 1, -(a.usage_ratio or 0)))
@@ -326,6 +349,7 @@ def budget_alerts(
 # ═══════════════════════════════════════════
 #  Platform P&L（收支總覽）
 # ═══════════════════════════════════════════
+
 
 class MonthlyPnLRow(BaseModel):
     month: str  # "2026-03"
@@ -397,14 +421,16 @@ def platform_pnl_summary(
             BillingRecord.status == "paid",
             BillingRecord.created_at >= month_start,
         )
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     # ── 本月支出（API 成本）──
     monthly_cost = float(
         db.query(func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0))
         .filter(UsageRecord.created_at >= month_start)
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
     monthly_profit = monthly_revenue - monthly_cost
@@ -412,14 +438,10 @@ def platform_pnl_summary(
 
     # ── 累計收入 / 支出 ──
     total_revenue = float(
-        db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0))
-        .filter(BillingRecord.status == "paid")
-        .scalar() or 0
+        db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0)).filter(BillingRecord.status == "paid").scalar()
+        or 0
     )
-    total_cost = float(
-        db.query(func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0))
-        .scalar() or 0
-    )
+    total_cost = float(db.query(func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0)).scalar() or 0)
 
     # ── MRR：活躍租戶方案月費加總 ──
     active_tenants = db.query(Tenant).filter(Tenant.status == "active").all()
@@ -452,23 +474,31 @@ def platform_pnl_summary(
 
         rev = float(
             db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0))
-            .filter(BillingRecord.status == "paid", BillingRecord.created_at >= ms, BillingRecord.created_at < me)
-            .scalar() or 0
+            .filter(
+                BillingRecord.status == "paid",
+                BillingRecord.created_at >= ms,
+                BillingRecord.created_at < me,
+            )
+            .scalar()
+            or 0
         )
         cost = float(
             db.query(func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0))
             .filter(UsageRecord.created_at >= ms, UsageRecord.created_at < me)
-            .scalar() or 0
+            .scalar()
+            or 0
         )
         profit = rev - cost
         margin = round(profit / rev * 100, 1) if rev > 0 else None
-        monthly_trend.append(MonthlyPnLRow(
-            month=f"{y}-{m:02d}",
-            revenue=round(rev, 2),
-            cost=round(cost, 6),
-            profit=round(profit, 2),
-            margin_pct=margin,
-        ))
+        monthly_trend.append(
+            MonthlyPnLRow(
+                month=f"{y}-{m:02d}",
+                revenue=round(rev, 2),
+                cost=round(cost, 6),
+                profit=round(profit, 2),
+                margin_pct=margin,
+            )
+        )
 
     # ── 支出分類（按 action_type）──
     cost_by_action_rows = (
@@ -483,7 +513,11 @@ def platform_pnl_summary(
         .all()
     )
     cost_by_action = [
-        {"action_type": r.action_type or "unknown", "count": r.count, "cost": round(float(r.cost or 0), 6)}
+        {
+            "action_type": r.action_type or "unknown",
+            "count": r.count,
+            "cost": round(float(r.cost or 0), 6),
+        }
         for r in cost_by_action_rows
     ]
 
@@ -508,6 +542,7 @@ def platform_pnl_summary(
 # ═══════════════════════════════════════════
 #  Per-Tenant P&L（租戶收支明細）
 # ═══════════════════════════════════════════
+
 
 @router.get("/tenant-pnl", response_model=List[TenantPnLRow])
 def tenant_pnl_list(
@@ -540,7 +575,11 @@ def tenant_pnl_list(
             BillingRecord.tenant_id,
             func.coalesce(func.sum(BillingRecord.amount_usd), 0).label("revenue"),
         )
-        .filter(BillingRecord.status == "paid", BillingRecord.created_at >= ms, BillingRecord.created_at < me)
+        .filter(
+            BillingRecord.status == "paid",
+            BillingRecord.created_at >= ms,
+            BillingRecord.created_at < me,
+        )
         .group_by(BillingRecord.tenant_id)
         .all()
     )
@@ -561,19 +600,12 @@ def tenant_pnl_list(
     cost_map = {str(r.tenant_id): r for r in cost_rows}
 
     # 用戶數 by tenant
-    user_counts = dict(
-        db.query(UserModel.tenant_id, func.count(UserModel.id))
-        .group_by(UserModel.tenant_id)
-        .all()
-    )
+    user_counts = dict(db.query(UserModel.tenant_id, func.count(UserModel.id)).group_by(UserModel.tenant_id).all())
 
     # 文件數 by tenant
     from app.models.document import Document
-    doc_counts = dict(
-        db.query(Document.tenant_id, func.count(Document.id))
-        .group_by(Document.tenant_id)
-        .all()
-    )
+
+    doc_counts = dict(db.query(Document.tenant_id, func.count(Document.id)).group_by(Document.tenant_id).all())
 
     result = []
     for t in tenants:
@@ -592,24 +624,33 @@ def tenant_pnl_list(
         margin = round(profit / rev * 100, 1) if rev > 0 else None
         avg_cpq = round(cost / queries, 6) if queries > 0 else 0.0
 
-        result.append(TenantPnLRow(
-            tenant_id=tid,
-            tenant_name=t.name,
-            plan=plan,
-            status=t.status,
-            user_count=user_counts.get(t.id, 0),
-            document_count=doc_counts.get(t.id, 0),
-            monthly_revenue=round(rev, 2),
-            monthly_cost=round(cost, 6),
-            monthly_profit=round(profit, 2),
-            margin_pct=margin,
-            monthly_queries=queries,
-            monthly_tokens=tokens,
-            avg_cost_per_query=avg_cpq,
-        ))
+        result.append(
+            TenantPnLRow(
+                tenant_id=tid,
+                tenant_name=t.name,
+                plan=plan,
+                status=t.status,
+                user_count=user_counts.get(t.id, 0),
+                document_count=doc_counts.get(t.id, 0),
+                monthly_revenue=round(rev, 2),
+                monthly_cost=round(cost, 6),
+                monthly_profit=round(profit, 2),
+                margin_pct=margin,
+                monthly_queries=queries,
+                monthly_tokens=tokens,
+                avg_cost_per_query=avg_cpq,
+            )
+        )
 
     # 排序
-    allowed_sorts = {"profit", "cost", "revenue", "margin_pct", "monthly_queries", "monthly_tokens"}
+    allowed_sorts = {
+        "profit",
+        "cost",
+        "revenue",
+        "margin_pct",
+        "monthly_queries",
+        "monthly_tokens",
+    }
     sort_field = sort_by if sort_by in allowed_sorts else "profit"
     field_map = {
         "profit": "monthly_profit",

@@ -3,6 +3,7 @@ Custom Domain Model (T4-6)
 
 Tracks per-tenant custom domain records with DNS verification status.
 """
+
 import uuid
 from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,7 +17,7 @@ class CustomDomain(Base):
     domain = Column(String(255), unique=True, nullable=False, index=True)
 
     # DNS Verification
-    verification_token = Column(String(64), nullable=False)   # TXT record value
+    verification_token = Column(String(64), nullable=False)  # TXT record value
     verified = Column(Boolean, default=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
 

@@ -7,6 +7,7 @@ from app.db.base_class import Base
 
 class Department(Base):
     """部門"""
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
@@ -30,12 +31,13 @@ class FeaturePermission(Base):
     租戶功能開關 — 控制每個租戶可使用的模組
     每個 record 代表一個 tenant + feature + role 的權限配置
     """
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    feature = Column(String, nullable=False, index=True)        # chat, documents, audit, kb, user_mgmt, departments
-    role = Column(String, nullable=True)                         # null = all roles; specific role override
+    feature = Column(String, nullable=False, index=True)  # chat, documents, audit, kb, user_mgmt, departments
+    role = Column(String, nullable=True)  # null = all roles; specific role override
     allowed = Column(Boolean, default=True)
-    config = Column(JSON, default={})                            # extra config, e.g. max_uploads, max_queries_per_day
+    config = Column(JSON, default={})  # extra config, e.g. max_uploads, max_queries_per_day
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

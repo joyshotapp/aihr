@@ -1,6 +1,7 @@
 """
 Billing API — billing history & invoice listing.
 """
+
 import logging
 from typing import Any, List, Optional
 
@@ -133,6 +134,7 @@ def download_invoice_pdf(
     tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
 
     from app.services.invoice_pdf import generate_invoice_pdf
+
     pdf_buf = generate_invoice_pdf(record, tenant)
 
     filename = f"invoice-{record.invoice_number or record_id}.pdf"

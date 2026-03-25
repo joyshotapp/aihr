@@ -63,7 +63,7 @@ PLAN_MATRIX = {
         "price_yearly_usd": 990,
         "price_monthly_twd": 2990,
         "price_yearly_twd": 29900,
-        "max_users": None,          # Unlimited
+        "max_users": None,  # Unlimited
         "max_documents": None,
         "max_storage_mb": None,
         "monthly_query_limit": None,
@@ -111,8 +111,5 @@ def get_upgrade_suggestion(current_plan: str, feature: str) -> str | None:
     for plan_name in ("pro", "enterprise"):
         if get_plan_feature(plan_name, feature):
             plan = get_plan(plan_name)
-            return (
-                f"升級至 {plan['display_name']} 方案即可使用此功能"
-                f"（NT${plan['price_monthly_twd']}/月）"
-            )
+            return f"升級至 {plan['display_name']} 方案即可使用此功能（NT${plan['price_monthly_twd']}/月）"
     return None

@@ -8,7 +8,7 @@ class DocumentBase(BaseModel):
     filename: Optional[str] = None
     file_type: Optional[str] = None  # pdf, docx, doc, txt, xlsx, xls, csv, html, markdown, rtf, json, image
     status: Optional[str] = None  # uploading, parsing, embedding, completed, failed
-    
+
 
 class DocumentCreate(DocumentBase):
     filename: str

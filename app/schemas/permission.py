@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 # ─── Department Schemas ───
 
+
 class DepartmentBase(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -33,10 +34,12 @@ class Department(DepartmentBase):
 
 class DepartmentTree(Department):
     """含子部門的樹狀結構"""
+
     children: List["DepartmentTree"] = []
 
 
 # ─── Feature Permission Schemas ───
+
 
 class FeaturePermissionBase(BaseModel):
     feature: str

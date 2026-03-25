@@ -1,4 +1,5 @@
 """Feature flag evaluation logic."""
+
 import hashlib
 from typing import Optional
 from uuid import UUID
@@ -30,9 +31,7 @@ def is_flag_enabled(
     3. Tenant allow-list (instant yes)
     4. Percentage rollout (deterministic hash)
     """
-    flag: Optional[FeatureFlag] = (
-        db.query(FeatureFlag).filter(FeatureFlag.key == flag_key).first()
-    )
+    flag: Optional[FeatureFlag] = db.query(FeatureFlag).filter(FeatureFlag.key == flag_key).first()
     if not flag or not flag.enabled:
         return False
 

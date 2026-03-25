@@ -41,7 +41,7 @@ def create_tenant(
     if tenant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tenant with this name already exists"
+            detail="Tenant with this name already exists",
         )
     tenant = crud_tenant.create(db, obj_in=tenant_in)
     return tenant
@@ -59,16 +59,10 @@ def read_tenant(
     """
     tenant = crud_tenant.get(db, tenant_id=tenant_id)
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     # 非 superuser 只能查看自己的租戶
     if not current_user.is_superuser and tenant.id != current_user.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     return tenant
 
 
@@ -85,9 +79,6 @@ def update_tenant(
     """
     tenant = crud_tenant.get(db, tenant_id=tenant_id)
     if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     tenant = crud_tenant.update(db, db_obj=tenant, obj_in=tenant_in)
     return tenant

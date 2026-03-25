@@ -6,6 +6,7 @@
   - 連線失敗時自動 reset，下次呼叫重新建立（circuit-breaker lite）
   - 失敗時回傳 None，呼叫端負責 graceful degradation
 """
+
 import logging
 import threading
 from typing import Optional

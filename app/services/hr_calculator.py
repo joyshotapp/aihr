@@ -14,12 +14,13 @@ from dataclasses import dataclass
 @dataclass
 class CalcResult:
     """計算結果"""
-    calc_type: str          # severance / overtime / annual_leave / hourly_wage
-    formula: str            # 公式說明
-    steps: List[str]        # 計算步驟
-    result: str             # 最終結果（文字）
-    result_value: float     # 最終數值
-    legal_basis: str        # 法條依據
+
+    calc_type: str  # severance / overtime / annual_leave / hourly_wage
+    formula: str  # 公式說明
+    steps: List[str]  # 計算步驟
+    result: str  # 最終結果（文字）
+    result_value: float  # 最終數值
+    legal_basis: str  # 法條依據
 
 
 # ── 數值擷取工具 ──
@@ -86,6 +87,7 @@ def _years_between(start: date, end: date) -> float:
 
 # ── 資遣費計算（勞基法第17條 / 勞退條例第12條）──
 
+
 def calc_severance(question: str, ref_date: Optional[date] = None) -> Optional[CalcResult]:
     """
     資遣費 = 年資(年) × 0.5 × 月平均工資
@@ -114,8 +116,8 @@ def calc_severance(question: str, ref_date: Optional[date] = None) -> Optional[C
     steps = [
         f"月平均工資 = {salary:,} 元",
         f"年資 = {years:.2f} 年" + (f"（到職日 {start_date} 至 {today}）" if start_date else ""),
-        f"資遣費基數 = {years:.2f} × 0.5 = {half_months:.2f} 個月" +
-        ("（超過上限 6 個月，取 6）" if half_months > 6 else ""),
+        f"資遣費基數 = {years:.2f} × 0.5 = {half_months:.2f} 個月"
+        + ("（超過上限 6 個月，取 6）" if half_months > 6 else ""),
         f"資遣費 = {salary:,} × {half_months_capped:.2f} = {severance:,} 元",
     ]
 
@@ -130,6 +132,7 @@ def calc_severance(question: str, ref_date: Optional[date] = None) -> Optional[C
 
 
 # ── 加班費計算（勞基法第24條）──
+
 
 def calc_overtime(question: str) -> Optional[CalcResult]:
     """
@@ -245,6 +248,7 @@ def calc_annual_leave(question: str, ref_date: Optional[date] = None) -> Optiona
 
 # ── 時薪計算 ──
 
+
 def calc_hourly_wage(question: str) -> Optional[CalcResult]:
     salary = _parse_money(question)
     if salary is None:
@@ -269,6 +273,7 @@ def calc_hourly_wage(question: str) -> Optional[CalcResult]:
 
 
 # ── 主入口 ──
+
 
 def try_hr_calculation(question: str) -> Optional[str]:
     """

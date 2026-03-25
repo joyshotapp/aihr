@@ -24,13 +24,28 @@ def upgrade() -> None:
     op.create_table(
         "customdomains",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("tenant_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("tenants.id"), nullable=False),
+        sa.Column(
+            "tenant_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("tenants.id"),
+            nullable=False,
+        ),
         sa.Column("domain", sa.String(length=255), nullable=False),
         sa.Column("verification_token", sa.String(length=64), nullable=False),
         sa.Column("verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("verified_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("ssl_provisioned", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column(
+            "ssl_provisioned",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.text("false"),
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=True,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint("domain", name="uq_customdomains_domain"),
     )

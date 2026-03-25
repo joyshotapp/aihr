@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # ── First superuser (used by scripts/initial_data.py) ──
     FIRST_SUPERUSER_EMAIL: str = "admin@example.com"
     FIRST_SUPERUSER_PASSWORD: str = "admin123"
-    
+
     # CORS
     BACKEND_CORS_ORIGINS: str = ""
 
@@ -39,15 +39,15 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "unihr_saas"
     POSTGRES_SSL_MODE: str = "prefer"  # disable, allow, prefer, require, verify-ca, verify-full
     DB_CONNECT_TIMEOUT_SECONDS: int = 5
-    
+
     # Redis
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: Optional[str] = None
-    REDIS_SOCKET_CONNECT_TIMEOUT: int = 2   # 秒
-    REDIS_SOCKET_TIMEOUT: int = 2           # 秒
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 2  # 秒
+    REDIS_SOCKET_TIMEOUT: int = 2  # 秒
     REDIS_SOCKET_KEEPALIVE: bool = True
-    REDIS_HEALTH_CHECK_INTERVAL: int = 30   # 秒，redis-py 內建心跳
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30  # 秒，redis-py 內建心跳
 
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
@@ -73,36 +73,18 @@ class Settings(BaseSettings):
     LLM_BACKEND: str = "gemini"  # gemini / core
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3-flash-preview"  # Generation 使用的模型
-    LLM_TEMPERATURE: float = 0.3     # 回答生成溫度（低 = 更精確）
-    LLM_MAX_TOKENS: int = 8192       # 回答最大 token 數（含 thinking tokens）
-    LLM_MAX_INPUT_TOKENS: int = 32000   # prompts + context 合計上限
+    LLM_TEMPERATURE: float = 0.3  # 回答生成溫度（低 = 更精確）
+    LLM_MAX_TOKENS: int = 8192  # 回答最大 token 數（含 thinking tokens）
+    LLM_MAX_INPUT_TOKENS: int = 32000  # prompts + context 合計上限
     LLM_CONTEXT_RESERVE_TOKENS: int = 2000  # 預留給模型輸出與安全緩衝
     LLM_GUARDRAIL_ENABLED: bool = True
     LLM_GUARDRAIL_BLOCK_PATTERNS: str = (
-        "ignore previous instructions,"
-        "system prompt,"
-        "developer message,"
-        "忽略上述,"
-        "忽略前面,"
-        "顯示提示詞,"
-        "越權"
+        "ignore previous instructions,system prompt,developer message,忽略上述,忽略前面,顯示提示詞,越權"
     )
     LLM_IO_SENSITIVE_FILTER_ENABLED: bool = True
-    LLM_INPUT_SENSITIVE_PATTERNS: str = (
-        "身分證字號,"
-        "信用卡,"
-        "密碼,"
-        "一次性密碼,"
-        "otp"
-    )
+    LLM_INPUT_SENSITIVE_PATTERNS: str = "身分證字號,信用卡,密碼,一次性密碼,otp"
     LLM_OUTPUT_SENSITIVE_PATTERNS: str = (
-        "api key,"
-        "secret key,"
-        "password,"
-        "access token,"
-        "refresh token,"
-        "系統提示詞,"
-        "system prompt"
+        "api key,secret key,password,access token,refresh token,系統提示詞,system prompt"
     )
 
     # Voyage AI + pgvector
@@ -132,11 +114,11 @@ class Settings(BaseSettings):
     LLAMAPARSE_RESULT_TYPE: str = "markdown"
     LLAMAPARSE_LANGUAGE: str = "zh-TW"
     LLAMAPARSE_AUTO_MODE: bool = True
-    
+
     # File Storage
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 50 * 1024 * 1024  # 50MB
-    
+
     # Document Processing
     CHUNK_SIZE: int = 1000  # tokens
     CHUNK_OVERLAP: int = 150  # tokens
@@ -148,16 +130,16 @@ class Settings(BaseSettings):
     OCR_LANGS: str = "chi_tra+eng"
 
     # Retrieval
-    RETRIEVAL_MODE: str = "hybrid"         # semantic / keyword / hybrid
-    RETRIEVAL_MIN_SCORE: float = 0.35      # 最低相似度閾值（Voyage rerank 0~1；低於此分數的 chunk 不送入 LLM）
-    RETRIEVAL_RERANK: bool = True          # 是否啟用重排序
-    RETRIEVAL_CACHE_TTL: int = 300         # 快取秒數
-    RETRIEVAL_TOP_K: int = 5               # 預設返回數量
+    RETRIEVAL_MODE: str = "hybrid"  # semantic / keyword / hybrid
+    RETRIEVAL_MIN_SCORE: float = 0.35  # 最低相似度閾值（Voyage rerank 0~1；低於此分數的 chunk 不送入 LLM）
+    RETRIEVAL_RERANK: bool = True  # 是否啟用重排序
+    RETRIEVAL_CACHE_TTL: int = 300  # 快取秒數
+    RETRIEVAL_TOP_K: int = 5  # 預設返回數量
 
     # Source arbitration (policy vs labor-law Core)
-    SOURCE_PRIORITY_MODE: str = "adaptive"    # adaptive / policy_first / law_first
-    POLICY_SOURCE_WEIGHT: float = 0.65         # 0.0 ~ 1.0
-    LAW_SOURCE_WEIGHT: float = 0.35            # 0.0 ~ 1.0
+    SOURCE_PRIORITY_MODE: str = "adaptive"  # adaptive / policy_first / law_first
+    POLICY_SOURCE_WEIGHT: float = 0.65  # 0.0 ~ 1.0
+    LAW_SOURCE_WEIGHT: float = 0.35  # 0.0 ~ 1.0
     CONFLICT_RESOLUTION_MODE: str = "legal_floor"  # legal_floor / policy_override / law_override
 
     # SSO / OAuth
@@ -170,10 +152,10 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_GLOBAL_PER_IP: int = 200     # requests / minute per IP
-    RATE_LIMIT_PER_USER: int = 60           # requests / minute per user
-    RATE_LIMIT_PER_TENANT: int = 300        # requests / minute per tenant
-    RATE_LIMIT_CHAT_PER_USER: int = 20      # chat requests / minute per user
+    RATE_LIMIT_GLOBAL_PER_IP: int = 200  # requests / minute per IP
+    RATE_LIMIT_PER_USER: int = 60  # requests / minute per user
+    RATE_LIMIT_PER_TENANT: int = 300  # requests / minute per tenant
+    RATE_LIMIT_CHAT_PER_USER: int = 20  # chat requests / minute per user
     CHAT_RETRIEVAL_TIMEOUT_SECONDS: int = 20
     CHAT_GENERATION_TIMEOUT_SECONDS: int = 20
 
@@ -202,8 +184,8 @@ class Settings(BaseSettings):
 
     # NewebPay 藍新金流
     NEWEBPAY_MERCHANT_ID: str = ""
-    NEWEBPAY_HASH_KEY: str = ""   # AES-256 HashKey (32 chars)
-    NEWEBPAY_HASH_IV: str = ""    # AES-256 HashIV (16 chars)
+    NEWEBPAY_HASH_KEY: str = ""  # AES-256 HashKey (32 chars)
+    NEWEBPAY_HASH_IV: str = ""  # AES-256 HashIV (16 chars)
     NEWEBPAY_TEST_MODE: bool = True  # True=測試環境, False=正式環境
 
     # Custom domain SSL automation
@@ -226,7 +208,7 @@ class Settings(BaseSettings):
     SUPPORT_BOOKING_URL: str = "mailto:support@yourdomain.com?subject=Support"
 
     # Admin API Network Isolation (T4-4)
-    ADMIN_IP_WHITELIST_ENABLED: bool = False   # Enable in production
+    ADMIN_IP_WHITELIST_ENABLED: bool = False  # Enable in production
     ADMIN_IP_WHITELIST: str = "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     ADMIN_TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
@@ -261,9 +243,7 @@ class Settings(BaseSettings):
     def _validate_source_priority_mode(cls, v: str) -> str:
         mode = (v or "adaptive").strip().lower()
         if mode not in {"adaptive", "policy_first", "law_first"}:
-            raise ValueError(
-                "SOURCE_PRIORITY_MODE must be one of: adaptive, policy_first, law_first"
-            )
+            raise ValueError("SOURCE_PRIORITY_MODE must be one of: adaptive, policy_first, law_first")
         return mode
 
     @field_validator("CONFLICT_RESOLUTION_MODE")
@@ -271,9 +251,7 @@ class Settings(BaseSettings):
     def _validate_conflict_resolution_mode(cls, v: str) -> str:
         mode = (v or "legal_floor").strip().lower()
         if mode not in {"legal_floor", "policy_override", "law_override"}:
-            raise ValueError(
-                "CONFLICT_RESOLUTION_MODE must be one of: legal_floor, policy_override, law_override"
-            )
+            raise ValueError("CONFLICT_RESOLUTION_MODE must be one of: legal_floor, policy_override, law_override")
         return mode
 
     @field_validator("POLICY_SOURCE_WEIGHT", "LAW_SOURCE_WEIGHT")
@@ -293,13 +271,12 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"SECRET_KEY is insecure ('{self.SECRET_KEY[:8]}…'). "
                     "Set a strong random key (≥ 32 chars) in .env or environment. "
-                    f"Hint: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                    f'Hint: python -c "import secrets; print(secrets.token_urlsafe(48))"'
                 )
             # ── Database password ──
             if self.POSTGRES_PASSWORD in ("postgres", ""):
                 raise ValueError(
-                    "POSTGRES_PASSWORD is set to default 'postgres'. "
-                    "Set a strong password in .env or environment."
+                    "POSTGRES_PASSWORD is set to default 'postgres'. Set a strong password in .env or environment."
                 )
             # ── Superuser credentials ──
             if self.FIRST_SUPERUSER_EMAIL == "admin@example.com":
@@ -341,5 +318,6 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.APP_ENV == "development"
+
 
 settings = Settings()

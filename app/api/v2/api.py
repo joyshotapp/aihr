@@ -16,8 +16,17 @@ from fastapi import APIRouter
 
 # Import ALL v1 routers (re-export as baseline)
 from app.api.v1.endpoints import (
-    auth, tenants, users, documents, kb, chat,
-    audit, departments, admin, sso, feature_flags,
+    auth,
+    tenants,
+    users,
+    documents,
+    kb,
+    chat,
+    audit,
+    departments,
+    admin,
+    sso,
+    feature_flags,
 )
 
 api_v2_router = APIRouter()

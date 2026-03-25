@@ -17,10 +17,14 @@ def provision_custom_domain_ssl_task(domain_id: str, tenant_id: str) -> dict:
     db = None
     try:
         db = create_session(tenant_id=tenant_id)
-        record = db.query(CustomDomain).filter(
-            CustomDomain.id == UUID(domain_id),
-            CustomDomain.tenant_id == UUID(tenant_id),
-        ).first()
+        record = (
+            db.query(CustomDomain)
+            .filter(
+                CustomDomain.id == UUID(domain_id),
+                CustomDomain.tenant_id == UUID(tenant_id),
+            )
+            .first()
+        )
         if not record:
             logger.warning("Custom domain %s not found for tenant %s", domain_id, tenant_id)
             return {"status": "missing"}

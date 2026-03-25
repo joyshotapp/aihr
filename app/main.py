@@ -31,6 +31,7 @@ def _ensure_pinecone_index():
         return
     try:
         from pinecone import Pinecone, ServerlessSpec
+
         pc = Pinecone(api_key=api_key)
         existing = [idx.name for idx in pc.list_indexes()]
         if index_name in existing:
@@ -62,6 +63,7 @@ def _ensure_r2_bucket():
         return
     try:
         import boto3
+
         s3 = boto3.client(
             "s3",
             endpoint_url=endpoint,
@@ -86,6 +88,7 @@ async def lifespan(app: FastAPI):
     _ensure_r2_bucket()
     yield
 
+
 app = FastAPI(
     title=settings.APP_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
@@ -95,7 +98,14 @@ app = FastAPI(
 # Set all CORS enabled origins
 cors_origins: list[str] = []
 if not settings.is_production:
-    cors_origins.extend(["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:8000"])
+    cors_origins.extend(
+        [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:3002",
+            "http://localhost:8000",
+        ]
+    )
 if settings.BACKEND_CORS_ORIGINS:
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
         cors_origins.extend([origin.strip() for origin in settings.BACKEND_CORS_ORIGINS.split(",") if origin.strip()])
@@ -133,13 +143,16 @@ if settings.RATE_LIMIT_ENABLED and not settings.is_development:
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(api_v2_router, prefix="/api/v2")
 
+
 @app.get("/")
 def root():
     return {"message": "Welcome to UniHR SaaS API", "docs": "/docs"}
 
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "env": settings.APP_ENV}
+
 
 @app.get("/api/versions")
 def api_versions():

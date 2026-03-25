@@ -13,6 +13,7 @@ Flow:
 
 Encryption: AES-256-CBC + SHA256 hash
 """
+
 import hashlib
 import json
 import logging
@@ -46,6 +47,7 @@ def _get_mpg_url() -> str:
 
 
 # ── AES-256-CBC Encryption (NewebPay TradeInfo) ──
+
 
 def _aes_encrypt(data: str, key: str, iv: str) -> str:
     """AES-256-CBC encrypt and return hex string."""
@@ -90,10 +92,7 @@ def _parse_trade_info(decrypted_str: str) -> dict:
         return json.loads(stripped)
 
     parsed = urllib.parse.parse_qs(stripped, keep_blank_values=True)
-    trade_info = {
-        key: values[0] if len(values) == 1 else values
-        for key, values in parsed.items()
-    }
+    trade_info = {key: values[0] if len(values) == 1 else values for key, values in parsed.items()}
     result_payload = trade_info.get("Result")
     if isinstance(result_payload, str) and result_payload:
         try:
@@ -104,6 +103,7 @@ def _parse_trade_info(decrypted_str: str) -> dict:
 
 
 # ── NewebPay Provider ──
+
 
 class NewebPayProvider(PaymentProvider):
     """藍新金流 MPG (Multi-Payment Gateway) integration."""
@@ -139,22 +139,20 @@ class NewebPayProvider(PaymentProvider):
             "VACC": 0,  # disable ATM transfer
             "CVS": 0,  # disable convenience store
             # Custom fields — used in webhook to identify tenant
-            "OrderComment": json.dumps({
-                "tenant_id": req.tenant_id,
-                "plan": req.plan,
-            }),
+            "OrderComment": json.dumps(
+                {
+                    "tenant_id": req.tenant_id,
+                    "plan": req.plan,
+                }
+            ),
         }
 
         # URL-encode the trade info
         trade_info_str = urllib.parse.urlencode(trade_info)
 
         # Encrypt
-        trade_info_encrypted = _aes_encrypt(
-            trade_info_str, self.hash_key, self.hash_iv
-        )
-        trade_sha = _sha256_hash(
-            trade_info_encrypted, self.hash_key, self.hash_iv
-        )
+        trade_info_encrypted = _aes_encrypt(trade_info_str, self.hash_key, self.hash_iv)
+        trade_sha = _sha256_hash(trade_info_encrypted, self.hash_key, self.hash_iv)
 
         # The checkout_url is the MPG endpoint; frontend needs to POST form data
         # We return formatted JSON that the frontend can use
@@ -183,16 +181,12 @@ class NewebPayProvider(PaymentProvider):
             raise ValueError("Missing TradeInfo or TradeSha")
 
         # 1. Verify SHA256 hash
-        expected_sha = _sha256_hash(
-            trade_info_encrypted, self.hash_key, self.hash_iv
-        )
+        expected_sha = _sha256_hash(trade_info_encrypted, self.hash_key, self.hash_iv)
         if trade_sha.upper() != expected_sha:
             raise ValueError("TradeSha verification failed")
 
         # 2. Decrypt TradeInfo
-        decrypted_str = _aes_decrypt(
-            trade_info_encrypted, self.hash_key, self.hash_iv
-        )
+        decrypted_str = _aes_decrypt(trade_info_encrypted, self.hash_key, self.hash_iv)
         trade_info = _parse_trade_info(decrypted_str)
 
         logger.info(

@@ -6,6 +6,7 @@ Access token: short-lived (30 min), HttpOnly cookie.
 Refresh token: long-lived, HttpOnly cookie, path-restricted to /api/v1/auth/refresh.
 CSRF token: non-HttpOnly cookie readable by JS, validated on state-changing requests.
 """
+
 import secrets
 from fastapi import Response, Request, HTTPException, status
 
@@ -18,7 +19,9 @@ CSRF_COOKIE = "unihr_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 
 # Cookie config
-_SECURE = settings.COOKIE_SECURE if settings.COOKIE_SECURE is not None else settings.APP_ENV in ("production", "staging")
+_SECURE = (
+    settings.COOKIE_SECURE if settings.COOKIE_SECURE is not None else settings.APP_ENV in ("production", "staging")
+)
 _SAMESITE = "lax"
 _DOMAIN = None  # browser will scope to the current domain
 

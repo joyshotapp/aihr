@@ -66,12 +66,7 @@ def send_onboarding_step2_task(self, user_id: str, tenant_id: str):
         if user.status != "active":
             return
 
-        doc_count = (
-            db.query(func.count(Document.id))
-            .filter(Document.tenant_id == UUID(tenant_id))
-            .scalar()
-            or 0
-        )
+        doc_count = db.query(func.count(Document.id)).filter(Document.tenant_id == UUID(tenant_id)).scalar() or 0
 
         ok = send_onboarding_step2_email(user.email, user.full_name or user.email, doc_count)
         if not ok:
