@@ -33,17 +33,18 @@
 
 ### 1) 先確認你要看哪個環境
 
-- **雲端（Linode / sslip.io / HTTP）**：最接近真實使用情境（含 gateway、DB、worker、網路延遲）
+- **雲端（Linode / HTTP / 直連 IP）**：最接近真實使用情境（含 gateway、DB、worker、網路延遲）
 - **本機（Docker 開發環境）**：最快能跑起來做功能驗證與開發
 
 ### 2) 雲端（Linode）直接測試
 
-- 使用者介面：`http://app.172.233.67.81.sslip.io`
-- 系統方介面：`http://admin.172.233.67.81.sslip.io`
-- API Swagger：`http://api.172.233.67.81.sslip.io/docs`
+- 使用者介面：`http://172.233.67.81`（前台，port 80）
+- 管理後台：`http://172.233.67.81:8080`（Admin Panel，port 8080）
+- API Swagger：`http://172.233.67.81/api/v1/docs`
 
 登入帳密：
-- Superuser：看 Linode 上的 `/opt/aihr/.env.production`（`FIRST_SUPERUSER_EMAIL` / `FIRST_SUPERUSER_PASSWORD`）
+- 前台 Superuser：看 Linode 上的 `/opt/aihr/.env.production`（`FIRST_SUPERUSER_EMAIL` / `FIRST_SUPERUSER_PASSWORD`）
+- Admin Panel：`admin@aihr.app` / `Admin123!`（或依 `.env.production` 設定）
 
 ### 3) RD 本機 10 分鐘跑起來（Docker）
 
@@ -57,7 +58,7 @@ docker-compose exec web python scripts/initial_data.py
 ### 4) 跑一次最準的雲端 E2E（建議 RD）
 
 ```powershell
-$env:AIHR_BASE_URL="http://api.172.233.67.81.sslip.io"
+$env:AIHR_BASE_URL="http://172.233.67.81"
 $env:AIHR_SUPERUSER_EMAIL="<你的superuser email>"
 $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
 C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
@@ -520,7 +521,7 @@ Push to main
 | 容器 | 說明 | Port | 安全特性 |
 |------|------|------|----------|
 | `web` | FastAPI 後端（uvicorn workers × 4） | 8000 | 無 --reload，無 volume mount，僅 uploads_data 持久化 |
-| `db` | PostgreSQL 15（pgvector + 調優） | — | 不對外暴露，密碼必填檢查，資源限制 |
+| `db` | PostgreSQL 16（pgvector + 調優） | — | 不對外暴露，密碼必填檢查，資源限制 |
 | `redis` | Redis 7（啟用 AOF + LRU） | — | requirepass 強制密碼，不對外暴露 |
 | `worker` | Celery 背景任務 Worker | — | max-tasks-per-child=200 防記憶體洩漏 |
 | `frontend` | React SPA（Nginx 靜態服務） | 80 | — |
@@ -742,13 +743,12 @@ bash scripts/deploy_linode.sh
 5. ? 執行資料庫遷移
 6. ? 驗證服務狀態
 
-**部署後存取**（使用 sslip.io 臨時網域）：
-- **使用者介面**: http://app.172.233.67.81.sslip.io
-- **系統方介面**: http://admin.172.233.67.81.sslip.io
-- **API 文件**: http://api.172.233.67.81.sslip.io/docs
-- **監控頁面**: http://監控頁面.172.233.67.81.sslip.io
+**部署後存取**（直連 IP）：
+- **使用者介面**: http://172.233.67.81（前台，port 80）
+- **管理後台**: http://172.233.67.81:8080（Admin Panel，port 8080）
+- **API 文件**: http://172.233.67.81/api/v1/docs
 
-> 註：以上以 `172.233.67.81` 為例；若 Linode IP 有變更，sslip.io 網域也會跟著變。
+> 若自訂網域已設定，可改用 `https://app.yourcompany.com`（前台）與 `https://admin.yourcompany.com`（後台）。
 
 > ?? **詳細文件**:
 > - [SSH 自動部署指南](docs/SSH_AUTO_DEPLOY.md) - 完整設定步驟與故障排除
@@ -777,8 +777,8 @@ docker compose -f docker-compose.prod.yml exec web python scripts/initial_data.p
 # 檢查所有容器運行狀態
 docker compose -f docker-compose.prod.yml ps
 
-# 健康檢查（sslip.io / HTTP）
-curl http://api.172.233.67.81.sslip.io/health
+# 健康檢查（直連 IP / HTTP）
+curl http://172.233.67.81/health
 
 # 若你已配置正式網域 + HTTPS，改用：
 # curl https://app.yourcompany.com/health
@@ -1486,6 +1486,7 @@ unihr-saas/
 │           ├── LoginPage.tsx
 │           ├── AdminPage.tsx
 │           ├── AdminQuotaPage.tsx
+│           ├── PnLPage.tsx            # ★ 平台損益分析（PnL）
 │           └── AnalyticsPage.tsx
 ├── nginx/                         # ★ Nginx 閘道設定
 │   ├── gateway.conf               #   多域名反向代理（app/admin/監控頁面）
