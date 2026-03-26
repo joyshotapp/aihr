@@ -3,7 +3,9 @@ Creates a fresh demo tenant + demo user for live presentation.
 Tenant: UniHR 現場展示公司 (completely empty, no documents)
 User:   demo@unihr.ai / admin123
 """
-import urllib.request, urllib.parse, json
+import urllib.request
+import urllib.parse
+import json
 
 BASE = "http://api.172-237-5-254.sslip.io"
 DEMO_EMAIL = "demo@unihr.ai"
@@ -80,5 +82,5 @@ print("=" * 50)
 print(f"Demo 帳號: {DEMO_EMAIL}")
 print(f"密碼:      {DEMO_PASS}")
 print(f"租戶:      {DEMO_TENANT}")
-print(f"文件:      空（可現場上傳展示）")
+print("文件:      空（可現場上傳展示）")
 print("=" * 50)

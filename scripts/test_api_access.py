@@ -33,7 +33,7 @@ except Exception as e:
     print(f"  ❌ Error: {e}")
 
 # 測試 4: 登入端點
-print(f"\n[4] 測試登入端點")
+print("\n[4] 測試登入端點")
 try:
     r = requests.post(
         f"{BASE_URL}/api/v1/auth/login/access-token",

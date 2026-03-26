@@ -3,10 +3,8 @@ Convert test-data/DEMO_GUIDE.md → test-data/DEMO_GUIDE.pdf
 Uses: markdown + fpdf2 (already installed)
 """
 import re
-import sys
 from pathlib import Path
 
-import markdown
 from fpdf import FPDF
 
 # ── Paths ─────────────────────────────────────────────────────────────────────

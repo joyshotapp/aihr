@@ -1,4 +1,8 @@
-import urllib.request, urllib.parse, json, os, sys
+import urllib.request
+import urllib.parse
+import json
+import os
+import sys
 
 BASE = os.getenv("AIHR_BASE_URL", "http://localhost:8000")
 SU_EMAIL = os.getenv("AIHR_SUPERUSER_EMAIL", "admin@example.com")

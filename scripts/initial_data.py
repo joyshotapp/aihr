@@ -1,5 +1,4 @@
 import logging
-import os
 
 from app.db.session import SessionLocal
 from app.crud import crud_user, crud_tenant

@@ -1,4 +1,3 @@
-import sys
 from app.db.session import SessionLocal
 from app.models.tenant import Tenant
 from app.models.document import Document, DocumentChunk

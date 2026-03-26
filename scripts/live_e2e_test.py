@@ -9,7 +9,6 @@ aihr 生產環境輕量 Smoke Test
 """
 
 import requests
-import json
 import time
 import os
 import sys

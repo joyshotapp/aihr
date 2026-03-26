@@ -1,5 +1,7 @@
 """Trigger frontend Docker build+deploy on the remote server via SSH."""
-import subprocess, sys, time
+import subprocess
+import sys
+import time
 
 SSH_HOST = "root@172.233.67.81"
 REMOTE_CMD = (

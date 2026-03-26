@@ -3,7 +3,6 @@
 import os
 import paramiko
 import sys
-import time
 
 HOST = os.getenv("AIHR_SERVER_HOST", "")
 USER = "root"
@@ -74,7 +73,7 @@ print("DONE")
 '''
 
     # 寫入暫存檔案到容器
-    escaped_code = init_code.replace("'", "'\\''")
+    init_code.replace("'", "'\\''")
     
     # 先寫入伺服器暫存檔案
     sftp = ssh.open_sftp()
@@ -89,7 +88,7 @@ print("DONE")
     print(f"  docker cp: rc={rc}")
 
     out, err, rc = run_ssh(ssh, f"docker exec {container_name} python /code/init_superuser.py")
-    print(f"\n📋 執行結果:")
+    print("\n📋 執行結果:")
     if out:
         for line in out.split('\n'):
             print(f"  {line}")

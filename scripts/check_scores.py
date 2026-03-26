@@ -1,5 +1,4 @@
 import json
-import sys
 
 log_path = "/code/test-data/test-results/run_20260211_031503/test_log.jsonl"
 targets = {"A2", "C4", "E1", "E3", "H1"}

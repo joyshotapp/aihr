@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 sys.path.insert(0, "/code")
 os.environ.setdefault("POSTGRES_SERVER", "db")
 os.environ.setdefault("REDIS_HOST", "redis")
@@ -20,7 +21,7 @@ with open('/code/test-data/test-results/run_20260211_031503/test_log.jsonl') as 
 print(f"tenant_id: {tenant_id}")
 
 if tenant_id:
-    from app.services.structured_answers import try_structured_answer, EmployeeRoster, RegistrationForm
+    from app.services.structured_answers import try_structured_answer, EmployeeRoster
     
     tid = UUID(tenant_id)
     
@@ -28,7 +29,7 @@ if tenant_id:
     roster = EmployeeRoster.load(tid)
     print(f"\nroster loaded: {roster is not None}")
     if roster:
-        print(f"roster has data: True")
+        print("roster has data: True")
     
     # Test A2
     print("\n--- A2 ---")

@@ -7,7 +7,6 @@ T4-15 資料庫調優 — 索引最佳化 Migration
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers
 revision = "t4_15_db_indexes"

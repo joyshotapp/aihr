@@ -1,7 +1,10 @@
 """
 批量上傳測試文件到 UniHR SaaS API
 """
-import os, sys, time, requests, glob
+import os
+import sys
+import time
+import requests
 
 BASE_URL = os.getenv("AIHR_BASE_URL", "http://localhost:8000")
 HR_USER = os.getenv("AIHR_HR_EMAIL")

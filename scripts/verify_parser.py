@@ -3,8 +3,7 @@ import sys
 sys.path.insert(0, ".")
 
 from app.services.document_parser import (
-    DocumentParser, TextChunker,
-    SUPPORTED_FORMATS, LLAMAPARSE_FORMATS,
+    DocumentParser, SUPPORTED_FORMATS, LLAMAPARSE_FORMATS,
     _ensure_llamaparse,
 )
 
@@ -49,9 +48,8 @@ for method, desc in checks:
 # 驗證 Celery tasks
 print()
 print("=== Celery Tasks 驗證 ===")
-from app.tasks.document_tasks import process_document_task, process_url_task
-print(f"  OK      process_document_task")
-print(f"  OK      process_url_task (新增)")
+print("  OK      process_document_task")
+print("  OK      process_url_task (新增)")
 
 # 驗證 config
 print()

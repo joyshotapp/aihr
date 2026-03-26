@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import re
 from pathlib import Path
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable
 
 PLACEHOLDER_PATTERNS = [
     r"^$",
