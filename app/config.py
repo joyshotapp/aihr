@@ -169,7 +169,7 @@ class Settings(BaseSettings):
     EMAIL_PROVIDER: str = "resend"  # "resend" | "sendgrid" | "smtp" | "" (disabled)
     RESEND_API_KEY: str = ""
     SENDGRID_API_KEY: str = ""
-    EMAIL_FROM_ADDRESS: str = "noreply@yourdomain.com"
+    EMAIL_FROM_ADDRESS: str = "noreply@aihr.app"
     EMAIL_FROM_NAME: str = "UniHR"
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
@@ -179,7 +179,7 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:3001"  # For email link generation
 
     # Billing / payment links
-    BILLING_CONTACT_URL: str = "mailto:sales@yourdomain.com"
+    BILLING_CONTACT_URL: str = "mailto:sales@aihr.app"
     BACKEND_BASE_URL: str = "http://localhost:8000"
 
     # NewebPay 藍新金流
@@ -203,9 +203,9 @@ class Settings(BaseSettings):
 
     # Support widget
     SUPPORT_WIDGET_ENABLED: bool = True
-    SUPPORT_EMAIL: str = "support@yourdomain.com"
-    SUPPORT_DOCS_URL: str = "https://yourdomain.com/docs"
-    SUPPORT_BOOKING_URL: str = "mailto:support@yourdomain.com?subject=Support"
+    SUPPORT_EMAIL: str = "support@aihr.app"
+    SUPPORT_DOCS_URL: str = "https://aihr.app/docs"
+    SUPPORT_BOOKING_URL: str = "mailto:support@aihr.app?subject=Support"
 
     # Admin API Network Isolation (T4-4)
     ADMIN_IP_WHITELIST_ENABLED: bool = False  # Enable in production
@@ -305,6 +305,22 @@ class Settings(BaseSettings):
                 raise ValueError("ADMIN_IP_WHITELIST_ENABLED must be true in production/staging")
             if any(origin.strip() == "*" for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()):
                 raise ValueError("Wildcard CORS origins are not allowed in production/staging")
+            # ── MFA for privileged roles ──
+            if not self.MFA_REQUIRED_FOR_PRIVILEGED:
+                raise ValueError(
+                    "MFA_REQUIRED_FOR_PRIVILEGED must be True in production/staging. "
+                    "Set MFA_REQUIRED_FOR_PRIVILEGED=True in .env to enforce 2FA for owner/admin/hr roles."
+                )
+            # ── NewebPay payment ──
+            if not self.NEWEBPAY_MERCHANT_ID:
+                raise ValueError(
+                    "NEWEBPAY_MERCHANT_ID is not set. Payment system will be unavailable in production. "
+                    "Configure NEWEBPAY_MERCHANT_ID, NEWEBPAY_HASH_KEY, NEWEBPAY_HASH_IV in .env."
+                )
+            if self.NEWEBPAY_TEST_MODE:
+                raise ValueError(
+                    "NEWEBPAY_TEST_MODE is True. Switch to False for production to use the live payment gateway."
+                )
         return self
 
     @property

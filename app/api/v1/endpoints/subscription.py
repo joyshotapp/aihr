@@ -218,9 +218,9 @@ def request_upgrade(
             )
         return UpgradeResult(
             success=True,
-            message="請前往付款頁面完成付款，付款成功後將自動啟用新方案。",
+            message="請前往訂閱頁面完成付款，付款成功後將自動啟用新方案。",
             new_plan=tenant.plan,
-            checkout_url=f"/subscription/checkout?plan={body.target_plan}",
+            checkout_url=f"/app/subscription?upgrade={body.target_plan}",
         )
 
     # Update plan and apply limits

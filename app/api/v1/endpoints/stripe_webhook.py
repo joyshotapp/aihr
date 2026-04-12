@@ -1,5 +1,19 @@
+# ============================================================
+# ⚠️  ARCHIVED — NOT MOUNTED IN PRODUCTION ROUTER
+# ============================================================
+# This file contains an incomplete Stripe integration that was
+# written speculatively and never activated.
+#
+# Current authoritative payment path:  NewebPay (藍新金流)
+#   • Checkout:  POST /api/v1/payment/checkout
+#   • Webhook:   POST /api/v1/payment/notify
+#
+# Do NOT import or include_router this file unless Stripe has
+# been fully set up (STRIPE_WEBHOOK_SECRET in Settings, price
+# IDs configured, and route tested end-to-end).
+# ============================================================
 """
-Stripe Webhook Handler
+Stripe Webhook Handler (ARCHIVED / NOT IN USE)
 
 Processes Stripe events to:
   - Activate subscriptions on checkout.session.completed
@@ -74,14 +88,15 @@ def _verify_stripe_signature(payload: bytes, sig_header: str, secret: str) -> di
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(deps.get_db)):
     """Handle Stripe webhook events."""
-    if not settings.STRIPE_WEBHOOK_SECRET:
+    stripe_secret = getattr(settings, "STRIPE_WEBHOOK_SECRET", "")
+    if not stripe_secret:
         raise HTTPException(status_code=503, detail="Stripe webhook not configured")
 
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
     try:
-        event = _verify_stripe_signature(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+        event = _verify_stripe_signature(payload, sig_header, stripe_secret)
     except ValueError as e:
         logger.warning("Stripe webhook signature failed: %s", e)
         raise HTTPException(status_code=400, detail="Invalid signature")

@@ -36,14 +36,14 @@ npm run test:e2e:public
 ```
 
 ```powershell
-$env:E2E_BASE_URL="http://172.233.67.81"
+$env:E2E_BASE_URL="http://<PRODUCTION_HOST>"
 npm run test:e2e -- auth.spec.ts
 ```
 
 ```powershell
-$env:E2E_BASE_URL="http://172.233.67.81"
-$env:E2E_USER_EMAIL="owner@aihr.app"
-$env:E2E_USER_PASSWORD="Owner123!"
+$env:E2E_BASE_URL="http://<PRODUCTION_HOST>"
+$env:E2E_USER_EMAIL="<測試帳號 email>"
+$env:E2E_USER_PASSWORD="<測試帳號密碼>"
 npm run test:e2e -- app.spec.ts
 ```
 
@@ -57,7 +57,7 @@ npm run verify:surface -- --base-url http://127.0.0.1:4173 --dist-dir dist
 ```
 
 ```powershell
-$env:FRONTEND_VERIFY_BASE_URL="http://172.233.67.81"
+$env:FRONTEND_VERIFY_BASE_URL="http://<PRODUCTION_HOST>"
 npm run verify:surface -- --dist-dir dist
 ```
 

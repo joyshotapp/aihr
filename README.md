@@ -38,13 +38,12 @@
 
 ### 2) 雲端（Linode）直接測試
 
-- 使用者介面：`http://172.233.67.81`（前台，port 80）
-- 管理後台：`http://172.233.67.81:8080`（Admin Panel，port 8080）
-- API Swagger：`http://172.233.67.81/api/v1/docs`
+- 使用者介面：`http://<PRODUCTION_HOST>`（前台，port 80）
+- 管理後台：`http://<PRODUCTION_HOST>:8080`（Admin Panel，port 8080）
+- API Swagger：`http://<PRODUCTION_HOST>/api/v1/docs`
 
-登入帳密：
-- 前台 Superuser：看 Linode 上的 `/opt/aihr/.env.production`（`FIRST_SUPERUSER_EMAIL` / `FIRST_SUPERUSER_PASSWORD`）
-- Admin Panel：`admin@aihr.app` / `Admin123!`（或依 `.env.production` 設定）
+> ⚠️ **正式站點 IP、管理後台帳號與密碼不記錄於版本控制。**
+> 相關資訊請查閱 Linode 機器上的 `/opt/aihr/.env.production`，或詢問有權限的維運人員。
 
 ### 3) RD 本機 10 分鐘跑起來（Docker）
 
@@ -58,7 +57,7 @@ docker-compose exec web python scripts/initial_data.py
 ### 4) 跑一次最準的雲端 E2E（建議 RD）
 
 ```powershell
-$env:AIHR_BASE_URL="http://172.233.67.81"
+$env:AIHR_BASE_URL="http://<PRODUCTION_HOST>"
 $env:AIHR_SUPERUSER_EMAIL="<你的superuser email>"
 $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
 C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
@@ -71,7 +70,7 @@ C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
 python scripts/check_local_cloud_parity.py
 
 # 同時比對 Linode /opt/aihr/.env.production（遮罩顯示）
-python scripts/check_local_cloud_parity.py --host 172.233.67.81 --user root --key C:/Users/User/.ssh/id_rsa_linode
+python scripts/check_local_cloud_parity.py --host <PRODUCTION_HOST> --user root --key C:/Users/User/.ssh/id_rsa_linode
 ```
 
 ### 6) 前端公開站 / 工作台路由速記
@@ -94,7 +93,7 @@ npm run verify:surface -- --base-url http://127.0.0.1:4173 --dist-dir dist
 
 ```powershell
 cd frontend
-$env:FRONTEND_VERIFY_BASE_URL="http://172.233.67.81"
+$env:FRONTEND_VERIFY_BASE_URL="http://<PRODUCTION_HOST>"
 npm run verify:surface -- --dist-dir dist
 ```
 
@@ -743,10 +742,12 @@ bash scripts/deploy_linode.sh
 5. ? 執行資料庫遷移
 6. ? 驗證服務狀態
 
-**部署後存取**（直連 IP）：
-- **使用者介面**: http://172.233.67.81（前台，port 80）
-- **管理後台**: http://172.233.67.81:8080（Admin Panel，port 8080）
-- **API 文件**: http://172.233.67.81/api/v1/docs
+**部署後存取**：
+- **使用者介面**: `http://<PRODUCTION_HOST>`（前台，port 80）
+- **管理後台**: `http://<PRODUCTION_HOST>:8080`（Admin Panel，port 8080）
+- **API 文件**: `http://<PRODUCTION_HOST>/api/v1/docs`
+
+> ⚠️ 正式站點 IP 不記錄於版本控制，請查閱維運人員或 `/opt/aihr/.env.production`。
 
 > 若自訂網域已設定，可改用 `https://app.yourcompany.com`（前台）與 `https://admin.yourcompany.com`（後台）。
 
@@ -778,7 +779,7 @@ docker compose -f docker-compose.prod.yml exec web python scripts/initial_data.p
 docker compose -f docker-compose.prod.yml ps
 
 # 健康檢查（直連 IP / HTTP）
-curl http://172.233.67.81/health
+curl http://<PRODUCTION_HOST>/health
 
 # 若你已配置正式網域 + HTTPS，改用：
 # curl https://app.yourcompany.com/health
@@ -1010,15 +1011,15 @@ k6 run tests/load/k6_load_test.js
 
 ```powershell
 cd frontend
-$env:E2E_BASE_URL="http://172.233.67.81"
+$env:E2E_BASE_URL="http://<PRODUCTION_HOST>"
 npm run test:e2e -- auth.spec.ts
 ```
 
 ```powershell
 cd frontend
-$env:E2E_BASE_URL="http://172.233.67.81"
-$env:E2E_USER_EMAIL="owner@aihr.app"
-$env:E2E_USER_PASSWORD="Owner123!"
+$env:E2E_BASE_URL="http://<PRODUCTION_HOST>"
+$env:E2E_USER_EMAIL="<測試帳號 email>"
+$env:E2E_USER_PASSWORD="<測試帳號密碼>"
 npm run test:e2e -- app.spec.ts
 ```
 
@@ -1300,10 +1301,25 @@ Copy-Item redis_data/dump.rdb redis_backup.rdb
 
 ## 生產環境維運檢查清單
 
-### 部署前檢查
+### ⚠️ 上線前人工必辦（2026-04-12 審查後遺留）
+
+以下 4 項無法純靠程式碼自動解決，**必須在正式開賣前完成並留下驗收紀錄**：
+
+| # | 項目 | 說明 |
+|---|---|---|
+| **A** | 法律頁面填入真實公司資訊 | `PrivacyPage.tsx` / `TermsPage.tsx` 中「運營公司名稱依營業登記為準」需替換為正式公司名稱、地址、統編，並經法務定稿 |
+| **B** | 正式部署安全驗證 | 在伺服器上實際確認：TLS 已啟用、HTTPS-only cookie（`Secure` flag）、資料庫 SSL 連線（`POSTGRES_SSL_MODE=require`）、管理後台 IP 白名單（`ADMIN_IP_WHITELIST_ENABLED=true`）均生效，並截圖或輸出留存 |
+| **C** | E2E 測試實際執行並通過 | 設定 `E2E_USER_EMAIL`、`E2E_USER_PASSWORD`（owner 角色）與 `E2E_MEMBER_EMAIL`、`E2E_MEMBER_PASSWORD`（非 owner 角色），對 staging 環境執行 `npx playwright test`，所有 test 必須 pass（不能全 skip） |
+| **D** | `BillingRecord.amount_usd` 欄位重命名 | 撰寫 Alembic migration 將欄位重命名為 `amount_twd`，在 staging 驗證後套用至 production，避免對帳與稽核時的幣別語意錯誤 |
+
+> 詳細判定依據見 [`docs/FINAL_PRODUCTION_REVIEW_2026-04-12.md`](docs/FINAL_PRODUCTION_REVIEW_2026-04-12.md)
+
+---
+
+### 部署前檢查（程式碼與設定）
 
 - [ ] `.env.production` 所有必填欄位已填入
-- [ ] SECRET_KEY 強度 ? 32 字元
+- [ ] SECRET_KEY 強度 ≥ 32 字元
 - [ ] 資料庫密碼非預設值
 - [ ] 超級管理員帳密已修改
 - [ ] 所有 API Keys 已取得並填入
@@ -1311,6 +1327,9 @@ Copy-Item redis_data/dump.rdb redis_backup.rdb
 - [ ] SSL 憑證已準備（nginx/certs/）
 - [ ] 防火牆規則已設定（僅開放 80/443）
 - [ ] PostgreSQL / Redis 未對外暴露
+- [x] `MFA_REQUIRED_FOR_PRIVILEGED=True` 已在 .env.production 設定（production validator 強制）
+- [x] `NEWEBPAY_TEST_MODE=False` 已確認（production validator 強制）
+- [x] `ADMIN_IP_WHITELIST_ENABLED=True` 已在 .env.production 設定（production validator 強制）
 
 ### 部署後驗證
 
@@ -1390,8 +1409,8 @@ unihr-saas/
 │   │   │   ├── custom_domains.py  #   自訂網域
 │   │   │   ├── regions.py         #   多區域管理
 │   │   │   ├── billing.py         #   帳單記錄
-│   │   │   ├── payment.py         #   藍新金流端點
-│   │   │   ├── stripe_webhook.py  #   Stripe Webhook（含冪等性檢查）
+│   │   │   ├── payment.py         #   藍新金流端點（主線金流）
+│   │   │   ├── stripe_webhook.py  #   Stripe Webhook（⚠️ 已封存，未掛入 router，保留備用）
 │   │   │   └── public.py          #   公開品牌端點
 │   │   └── v2/                    # v2 API（向下相容 v1）
 │   ├── models/                    # SQLAlchemy 模型
