@@ -78,3 +78,10 @@ test-data/test-results/
 
 # ---------- 一次性工具腳本 ----------
 scripts/_fix_secrets.py
+scripts/_convert_docs.py
+
+# ---------- 安裝程式 ----------
+*.msi
+
+# ---------- 根目錄測試結果 ----------
+test-results/
