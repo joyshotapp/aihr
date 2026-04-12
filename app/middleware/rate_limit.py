@@ -45,6 +45,30 @@ def _is_loopback_ip(value: str) -> bool:
         return False
 
 
+def _is_bypassed_ip(value: str) -> bool:
+    raw = getattr(settings, "RATE_LIMIT_BYPASS_IPS", "") or ""
+    candidates = [item.strip() for item in raw.split(",") if item.strip()]
+    if not candidates:
+        return False
+
+    try:
+        client_ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+
+    for candidate in candidates:
+        try:
+            if "/" in candidate:
+                if client_ip in ipaddress.ip_network(candidate, strict=False):
+                    return True
+            elif client_ip == ipaddress.ip_address(candidate):
+                return True
+        except ValueError:
+            continue
+
+    return False
+
+
 # ═══════════════════════════════════════════
 #  Rate Limiter Core
 # ═══════════════════════════════════════════
@@ -217,6 +241,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Allow local server-side verification traffic to pass without tripping abuse locks.
         if _is_loopback_ip(client_ip):
+            return await call_next(request)
+
+        if _is_bypassed_ip(client_ip):
             return await call_next(request)
 
         is_high_risk = path in HIGH_RISK_PATHS

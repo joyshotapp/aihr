@@ -152,6 +152,7 @@ class Settings(BaseSettings):
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_BYPASS_IPS: str = ""
     RATE_LIMIT_GLOBAL_PER_IP: int = 200  # requests / minute per IP
     RATE_LIMIT_PER_USER: int = 60  # requests / minute per user
     RATE_LIMIT_PER_TENANT: int = 300  # requests / minute per tenant

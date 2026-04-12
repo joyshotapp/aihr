@@ -17,6 +17,7 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /auth\.setup\.ts/,
+      retries: 0,
     },
     // ── Main test project — depends on auth setup being complete ──────────
     {

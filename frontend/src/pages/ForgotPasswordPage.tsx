@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
               <div className="rounded-xl border border-green-200 bg-green-50 p-5 text-center">
                 <p className="text-sm font-medium text-green-800">郵件已傳送</p>
                 <p className="mt-1 text-sm text-green-600">
-                  若該信箱已註冊，您將收到一封密碼重設郵件，請查看收件匣。
+                  若該信箱已註冊，系統將傳送重設連結，請查看收件匣。
                 </p>
               </div>
               <Link
