@@ -313,11 +313,14 @@ class Settings(BaseSettings):
                 )
             # ── NewebPay payment ──
             if not self.NEWEBPAY_MERCHANT_ID:
-                raise ValueError(
+                import warnings
+                warnings.warn(
                     "NEWEBPAY_MERCHANT_ID is not set. Payment system will be unavailable in production. "
-                    "Configure NEWEBPAY_MERCHANT_ID, NEWEBPAY_HASH_KEY, NEWEBPAY_HASH_IV in .env."
+                    "Configure NEWEBPAY_MERCHANT_ID, NEWEBPAY_HASH_KEY, NEWEBPAY_HASH_IV in .env.",
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
-            if self.NEWEBPAY_TEST_MODE:
+            elif self.NEWEBPAY_TEST_MODE:
                 raise ValueError(
                     "NEWEBPAY_TEST_MODE is True. Switch to False for production to use the live payment gateway."
                 )
