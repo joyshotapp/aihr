@@ -25,6 +25,7 @@ import LandingPage from './pages/LandingPage'
 import PricingPage from './pages/PricingPage'
 import SignupPage from './pages/SignupPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 
 const legacyAppRoutes = [
   'documents',
@@ -64,6 +65,7 @@ function AppRoutes() {
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/signup" element={token ? <Navigate to="/app" replace /> : <SignupPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/login" element={token ? <Navigate to="/app" replace /> : <LoginPage />} />
       <Route path="/login/callback" element={<SSOCallbackPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />

@@ -13,9 +13,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // ── Global auth setup — runs once, saves cookies/localStorage ──────────
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    // ── Main test project — depends on auth setup being complete ──────────
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
     },
   ],
   webServer: process.env.CI
