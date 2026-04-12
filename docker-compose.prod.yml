@@ -299,6 +299,11 @@ services:
       - "3310"
     volumes:
       - clamav_data:/var/lib/clamav
+    environment:
+      # Prevent double-loading old+new DB during updates (cuts peak RSS from ~1.2G to ~600M)
+      - CLAMD_CONF_ConcurrentDatabaseReload=no
+      - CLAMD_CONF_MaxFileSize=25M
+      - CLAMD_CONF_MaxScanSize=100M
     deploy:
       resources:
         limits:
