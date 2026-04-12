@@ -8,7 +8,7 @@ Create Date: 2026-04-12
 from alembic import op
 
 revision = "t12_1_rename_amount_usd_to_amount_twd"
-down_revision = "t11_1_email_verified"
+down_revision = "t10_1"
 branch_labels = None
 depends_on = None
 
