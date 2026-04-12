@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Loader2, Mail, ArrowLeft } from 'lucide-react'
 import PublicPageShell from '../components/PublicPageShell'
-import { api } from '../api'
+import api from '../api'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
