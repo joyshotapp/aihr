@@ -93,7 +93,7 @@
 ### 1. Rate limiting 採 Redis fail-open
 
 - [app/middleware/rate_limit.py](app/middleware/rate_limit.py#L65-L89) 在 Redis 無法使用時會直接允許請求。
-- 這對可用性友善，但對公開 SaaS 對外開賣環境來說，至少應區分高風險路徑，例如登入、忘記密碼、驗證碼、支付 webhook，不宜全部 fail-open。
+- **✅ 已修復（2026-04-12）**：登入、忘記密碼、重設密碼、驗證信、付款 checkout、付款 webhook、邀請接受等高風險路徑已改為 `fail_closed=True`，Redis 失效時回傳 `503 Service Unavailable`；一般路徑保持 fail-open 以維持可用性。高風險路徑同時套用更嚴格的每分鐘 10 次限流（可透過 `RATE_LIMIT_HIGH_RISK` 環境變數覆蓋）。
 
 ### 2. 管理角色 2FA 是能力存在，不是預設落地
 
@@ -165,6 +165,7 @@
 2. 建立 SLA / incident response / customer-facing trust docs。
 3. 建立真正可用的 release gate 與回歸測試矩陣。
 4. 透過 Alembic migration 將 `BillingRecord.amount_usd` 重命名為 `amount_twd`，消除幣別語意歧義。
+   **✅ 已完成（2026-04-12）**：`billing_records.amount_usd` 已透過 SQL ALTER TABLE 重命名為 `amount_twd`，DB currency 預設改為 `TWD`。相關 ORM、API schema（billing.py、analytics.py、payment.py）、前端型別（api.ts、SubscriptionPage.tsx）、invoice PDF 格式（`NT$` + 整數顯示）全數更新。Alembic 版本已 stamp 為 `t12_1`。
 
 ## 建議的上線前驗收清單
 
