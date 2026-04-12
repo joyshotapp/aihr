@@ -242,7 +242,7 @@ export default function SubscriptionPage() {
                       <td className="px-4 py-3 text-sm text-gray-900">{r.description || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 capitalize">{r.plan || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-900 text-right font-medium">
-                        ${r.currency === 'TWD' ? `NT$${r.amount_usd.toLocaleString()}` : `$${r.amount_usd.toFixed(2)}`} {r.currency}
+                        ${r.currency === 'TWD' ? `NT$${r.amount_twd.toLocaleString()}` : `$${r.amount_twd.toFixed(2)}`} {r.currency}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${

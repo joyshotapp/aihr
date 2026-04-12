@@ -20,8 +20,8 @@ class BillingRecord(Base):
     )
     # NewebPay TradeNo or manual reference
     external_id = Column(String(255), nullable=True, unique=True)
-    amount_usd = Column(Numeric(10, 2), nullable=False)
-    currency = Column(String(3), default="USD")
+    amount_twd = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), default="TWD")
     status = Column(String(50), default="pending")  # pending, paid, failed, refunded
     description = Column(Text, nullable=True)
     plan = Column(String(50), nullable=True)  # free, pro, enterprise

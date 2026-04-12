@@ -434,7 +434,7 @@ def platform_pnl_summary(
 
     # ── 本月收入（已付款帳單）──
     monthly_revenue = float(
-        db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0))
+        db.query(func.coalesce(func.sum(BillingRecord.amount_twd), 0))
         .filter(
             BillingRecord.status == "paid",
             BillingRecord.created_at >= month_start,
@@ -480,7 +480,7 @@ def platform_pnl_summary(
 
     # ── 累計收入 / 支出 ──
     total_revenue = float(
-        db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0)).filter(BillingRecord.status == "paid").scalar()
+        db.query(func.coalesce(func.sum(BillingRecord.amount_twd), 0)).filter(BillingRecord.status == "paid").scalar()
         or 0
     )
     total_cost = float(db.query(func.coalesce(func.sum(UsageRecord.estimated_cost_usd), 0)).scalar() or 0)
@@ -515,7 +515,7 @@ def platform_pnl_summary(
             me = datetime(y, m + 1, 1)
 
         rev = float(
-            db.query(func.coalesce(func.sum(BillingRecord.amount_usd), 0))
+            db.query(func.coalesce(func.sum(BillingRecord.amount_twd), 0))
             .filter(
                 BillingRecord.status == "paid",
                 BillingRecord.created_at >= ms,
@@ -636,7 +636,7 @@ def tenant_pnl_list(
     rev_rows = (
         db.query(
             BillingRecord.tenant_id,
-            func.coalesce(func.sum(BillingRecord.amount_usd), 0).label("revenue"),
+            func.coalesce(func.sum(BillingRecord.amount_twd), 0).label("revenue"),
         )
         .filter(
             BillingRecord.status == "paid",

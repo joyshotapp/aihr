@@ -67,14 +67,21 @@ class RateLimiter:
         key: str,
         max_requests: int,
         window_seconds: int,
+        fail_closed: bool = False,
     ) -> Tuple[bool, int, int]:
         """
         滑動視窗限流檢查。
         回傳 (allowed, remaining, retry_after_seconds)
+
+        fail_closed=True：Redis 不可用時拒絕請求（用於高風險路徑）。
+        fail_closed=False：Redis 不可用時放行（用於一般路徑，維持可用性）。
         """
         r = self.r
         if r is None:
-            return True, max_requests, 0  # Redis 不可用時放行
+            if fail_closed:
+                # 高風險路徑：Redis 失效時拒絕，retry_after 用 0 表示「服務暫不可用」
+                return False, 0, 0
+            return True, max_requests, 0  # 一般路徑：Redis 不可用時放行
         try:
             now = time.time()
             window_start = now - window_seconds
@@ -98,8 +105,10 @@ class RateLimiter:
             return True, max(remaining, 0), 0
 
         except Exception as e:
-            logger.warning("Rate limiter Redis error: %s, allowing request", e)
-            return True, max_requests, 0  # Redis 不可用時放行
+            logger.warning("Rate limiter Redis error: %s, fail_closed=%s", e, fail_closed)
+            if fail_closed:
+                return False, 0, 0
+            return True, max_requests, 0  # 一般路徑：Redis 不可用時放行
 
     def record_abuse(self, key: str, threshold: int = 100, window: int = 60) -> bool:
         """
@@ -154,6 +163,23 @@ RATE_LIMITS = {
         "max_requests": int(getattr(settings, "RATE_LIMIT_CHAT_PER_USER", 20)),
         "window_seconds": 60,
     },
+    # 高風險路徑：嚴格限流，Redis 失效時 fail-closed
+    "high_risk": {
+        "max_requests": int(getattr(settings, "RATE_LIMIT_HIGH_RISK", 10)),
+        "window_seconds": 60,
+    },
+}
+
+# 高風險路徑集合（Redis 失效時 fail-closed，拒絕而非放行）
+HIGH_RISK_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
+    "/api/v1/auth/verify-email",
+    "/api/v1/auth/resend-verification",
+    "/api/v1/payment/checkout",
+    "/api/v1/payment/webhook",
+    "/api/v1/invitations/accept",
 }
 
 
@@ -169,6 +195,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     1. IP 是否被濫用封鎖
     2. IP 級全域限流
     3. 如果能識別用戶/租戶，進一步限流
+
+    高風險路徑（登入、付款、驗證等）採用更嚴格限流，
+    且在 Redis 失效時 fail-closed（回傳 503），防止暴力攻擊。
     """
 
     SKIP_PATHS = {"/", "/health", "/api/versions", "/docs", "/openapi.json", "/redoc"}
@@ -190,8 +219,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if _is_loopback_ip(client_ip):
             return await call_next(request)
 
+        is_high_risk = path in HIGH_RISK_PATHS
+
         try:
-            # 1. 濫用檢查
+            # 1. 濫用檢查（高風險路徑：Redis 失效時同樣不封鎖，但限流本身會 fail-closed）
             if self.limiter.record_abuse(f"ip:{client_ip}"):
                 return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -204,12 +235,49 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     headers={"Retry-After": "600"},
                 )
 
-            # 2. IP 級全域限流
+            # 2a. 高風險路徑：嚴格限流，Redis 失效時 fail-closed
+            if is_high_risk:
+                hr_conf = RATE_LIMITS["high_risk"]
+                allowed, remaining, retry_after = self.limiter.is_allowed(
+                    f"rl:hr:{client_ip}:{path}",
+                    hr_conf["max_requests"],
+                    hr_conf["window_seconds"],
+                    fail_closed=True,
+                )
+                if not allowed:
+                    if retry_after == 0:
+                        # Redis 不可用，服務暫不可用（fail-closed）
+                        return JSONResponse(
+                            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            content={
+                                "detail": {
+                                    "error": "service_unavailable",
+                                    "message": "速率限制服務暫時無法使用，請稍後再試。",
+                                }
+                            },
+                        )
+                    return JSONResponse(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        content={
+                            "detail": {
+                                "error": "rate_limited",
+                                "message": "請求過於頻繁，請稍後再試。",
+                            }
+                        },
+                        headers={
+                            "Retry-After": str(retry_after),
+                            "X-RateLimit-Limit": str(hr_conf["max_requests"]),
+                            "X-RateLimit-Remaining": "0",
+                        },
+                    )
+
+            # 2b. 一般路徑：IP 級全域限流，Redis 失效時 fail-open
             ip_conf = RATE_LIMITS["global_per_ip"]
             allowed, remaining, retry_after = self.limiter.is_allowed(
                 f"rl:ip:{client_ip}",
                 ip_conf["max_requests"],
                 ip_conf["window_seconds"],
+                fail_closed=False,
             )
             if not allowed:
                 return JSONResponse(
@@ -228,7 +296,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
 
         except Exception:
-            # Redis 不可用時不阻擋請求
+            # Redis 不可用時一般路徑不阻擋請求；高風險路徑已在 is_allowed 層處理
             pass
 
         response = await call_next(request)

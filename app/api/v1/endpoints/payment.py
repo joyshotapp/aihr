@@ -204,7 +204,7 @@ def _handle_payment_success(db: Session, event):
         id=uuid.uuid4(),
         tenant_id=tenant.id,
         external_id=event.gateway_trade_no,
-        amount_usd=event.amount,  # Actually TWD, stored as-is
+        amount_twd=event.amount,
         currency=event.currency,
         status="paid",
         description=f"升級至 {plan_config['display_name']}",
@@ -251,7 +251,7 @@ def _handle_payment_failed(db: Session, event):
         id=uuid.uuid4(),
         tenant_id=tenant.id,
         external_id=event.gateway_trade_no or event.trade_no,
-        amount_usd=event.amount,
+        amount_twd=event.amount,
         currency=event.currency,
         status="failed",
         description=f"付款失敗 — {event.plan} 方案",

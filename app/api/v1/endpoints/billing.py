@@ -23,7 +23,7 @@ logger = logging.getLogger("unihr.billing")
 class BillingRecordOut(BaseModel):
     id: str
     external_id: Optional[str] = None
-    amount_usd: float
+    amount_twd: float
     currency: str
     status: str
     description: Optional[str] = None
@@ -60,7 +60,7 @@ def list_billing_records(
         BillingRecordOut(
             id=str(r.id),
             external_id=r.external_id,
-            amount_usd=float(r.amount_usd),
+            amount_twd=float(r.amount_twd),
             currency=r.currency,
             status=r.status,
             description=r.description,
@@ -98,7 +98,7 @@ def get_billing_record(
     return BillingRecordOut(
         id=str(record.id),
         external_id=record.external_id,
-        amount_usd=float(record.amount_usd),
+        amount_twd=float(record.amount_twd),
         currency=record.currency,
         status=record.status,
         description=record.description,

@@ -269,7 +269,7 @@ export const paymentApi = {
 export interface BillingRecord {
   id: string
   external_id?: string | null
-  amount_usd: number  // TWD for NewebPay, USD for legacy
+  amount_twd: number
   currency: string
   status: 'paid' | 'pending' | 'failed' | 'refunded' | string
   description?: string | null
