@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { analyticsApi } from '../api'
+import { adminApi, analyticsApi, type LLMQualitySummary } from '../api'
 import {
   Loader2, AlertCircle, TrendingUp, TrendingDown,
   AlertTriangle, DollarSign, Zap, Activity, Calendar,
@@ -52,7 +52,7 @@ function TrendTab() {
     setLoading(false)
   }, [days])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void load() }, [load])
 
   if (loading) return <Loader />
   if (!data.length) return <Empty text="暫無趨勢資料" />
@@ -231,7 +231,7 @@ function AnomaliesTab() {
     setLoading(false)
   }, [threshold])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void load() }, [load])
 
   if (loading) return <Loader />
 
@@ -378,6 +378,11 @@ const tabs: { key: Tab; label: string; icon: typeof TrendingUp }[] = [
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>('trend')
+  const [llmQuality, setLlmQuality] = useState<LLMQualitySummary | null>(null)
+
+  useEffect(() => {
+    adminApi.llmQuality({ days: '7' }).then(setLlmQuality).catch(() => setLlmQuality(null))
+  }, [])
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -386,6 +391,43 @@ export default function AnalyticsPage() {
           <h1 className="text-2xl font-bold text-gray-900">成本分析</h1>
           <p className="mt-1 text-sm text-gray-500">平台使用量趨勢、租戶成本比較與異常偵測</p>
         </div>
+
+        {llmQuality && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              icon={Zap}
+              label="7 天 AI 呼叫數"
+              value={llmQuality.trace_count.toLocaleString()}
+              sub={llmQuality.langfuse_enabled ? 'Langfuse 已啟用' : '僅回饋資料'}
+              color="bg-indigo-50 text-indigo-600"
+            />
+            <StatCard
+              icon={Activity}
+              label="AI 平均延遲"
+              value={`${Math.round(llmQuality.avg_latency_ms)} ms`}
+              sub={`P95 ${Math.round(llmQuality.p95_latency_ms)} ms`}
+              color="bg-emerald-50 text-emerald-600"
+            />
+            <StatCard
+              icon={DollarSign}
+              label="AI 成本"
+              value={`$${llmQuality.total_cost_usd.toFixed(4)}`}
+              sub={`資料來源：${llmQuality.source}`}
+              color="bg-amber-50 text-amber-600"
+            />
+            <StatCard
+              icon={TrendingUp}
+              label="正向回饋率"
+              value={
+                llmQuality.positive_feedback_rate != null
+                  ? `${(llmQuality.positive_feedback_rate * 100).toFixed(1)}%`
+                  : 'N/A'
+              }
+              sub={`👍 ${llmQuality.positive_feedback} / 👎 ${llmQuality.negative_feedback}`}
+              color="bg-blue-50 text-blue-600"
+            />
+          </div>
+        )}
 
         <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
           {tabs.map(({ key, label, icon: Icon }) => (

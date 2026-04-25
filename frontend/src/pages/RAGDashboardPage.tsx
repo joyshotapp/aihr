@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { chatApi } from '../api'
 import { Loader2, MessageSquare, Clock, ThumbsUp, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -28,14 +28,21 @@ export default function RAGDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(30)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     setLoading(true)
-    chatApi
-      .ragDashboard(days)
-      .then(setData)
-      .catch(() => toast.error('載入儀表板失敗'))
-      .finally(() => setLoading(false))
+    try {
+      const result = await chatApi.ragDashboard(days)
+      setData(result)
+    } catch {
+      toast.error('載入儀表板失敗')
+    } finally {
+      setLoading(false)
+    }
   }, [days])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   if (loading) {
     return (

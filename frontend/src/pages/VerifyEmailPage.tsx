@@ -10,23 +10,23 @@ export default function VerifyEmailPage() {
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    if (!token) {
-      setStatus('error')
-      setErrorMsg('缺少驗證令牌')
-      return
-    }
-    authApi
-      .verifyEmail(token)
-      .then((res) => {
+    void (async () => {
+      if (!token) {
+        setStatus('error')
+        setErrorMsg('缺少驗證令牌')
+        return
+      }
+      try {
+        const res = await authApi.verifyEmail(token)
         setStatus(res.already_verified ? 'already' : 'success')
-      })
-      .catch((err) => {
+      } catch (err) {
         setStatus('error')
         setErrorMsg(
           (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
             '驗證連結無效或已過期'
         )
-      })
+      }
+    })()
   }, [token])
 
   return (

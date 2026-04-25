@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react'
-import { adminApi } from '../api'
+import {
+  adminApi,
+  type LLMQualitySummary,
+  type SystemHealthResponse,
+  type TenantStatsResponse,
+} from '../api'
 import {
   Loader2, Building2, Users, FileText, MessageSquare,
   Coins, Activity, TrendingUp, Search, ChevronRight,
-  Heart, AlertCircle, CheckCircle2, Server
+  Heart, AlertCircle, CheckCircle2, Server, PauseCircle, PlayCircle, Bot, Clock3
 } from 'lucide-react'
 
 // ─── Sub-views ───
@@ -190,15 +195,39 @@ function TenantsView({ onNavigate }: { onNavigate: (v: View, id?: string) => voi
 
 // ═══ Tenant Detail ═══
 function TenantDetailView({ tenantId, onBack }: { tenantId: string; onBack: () => void }) {
-  const [stats, setStats] = useState<any>(null)
+  const [stats, setStats] = useState<TenantStatsResponse | null>(null)
+  const [llmQuality, setLlmQuality] = useState<LLMQualitySummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   useEffect(() => {
-    adminApi.tenantStats(tenantId).then(setStats).catch(() => null).finally(() => setLoading(false))
+    Promise.all([
+      adminApi.tenantStats(tenantId),
+      adminApi.llmQuality({ tenant_id: tenantId, days: '7' }),
+    ])
+      .then(([statsData, llmData]) => {
+        setStats(statsData)
+        setLlmQuality(llmData)
+      })
+      .catch(() => null)
+      .finally(() => setLoading(false))
   }, [tenantId])
 
   if (loading) return <Loader />
   if (!stats) return <EmptyState text="無法載入租戶資料" />
+
+  const nextStatus = stats.status === 'active' ? 'suspended' : 'active'
+  const nextStatusLabel = nextStatus === 'active' ? '恢復租戶' : '暫停租戶'
+
+  const handleToggleStatus = async () => {
+    setUpdatingStatus(true)
+    try {
+      const updated = await adminApi.updateTenant(tenantId, { status: nextStatus })
+      setStats(prev => prev ? { ...prev, status: updated.status } : prev)
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -209,6 +238,16 @@ function TenantDetailView({ tenantId, onBack }: { tenantId: string; onBack: () =
           <h2 className="text-xl font-bold text-gray-900">{stats.tenant_name}</h2>
           <p className="text-sm text-gray-500">方案: {stats.plan} &middot; 狀態: {stats.status}</p>
         </div>
+        <button
+          onClick={handleToggleStatus}
+          disabled={updatingStatus}
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+            nextStatus === 'active' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+          }`}
+        >
+          {nextStatus === 'active' ? <PlayCircle className="h-4 w-4" /> : <PauseCircle className="h-4 w-4" />}
+          {updatingStatus ? '處理中...' : nextStatusLabel}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -217,6 +256,21 @@ function TenantDetailView({ tenantId, onBack }: { tenantId: string; onBack: () =
         <StatCard icon={MessageSquare} label="對話數" value={stats.conversation_count} color="bg-purple-50 text-purple-600" />
         <StatCard icon={Coins} label="總成本" value={`$${stats.total_cost.toFixed(4)}`} sub={`${stats.total_actions} 次呼叫`} color="bg-amber-50 text-amber-600" />
       </div>
+
+      {llmQuality && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard icon={Bot} label="7 天 AI 呼叫" value={llmQuality.trace_count} color="bg-indigo-50 text-indigo-600" />
+          <StatCard icon={Clock3} label="平均延遲" value={`${Math.round(llmQuality.avg_latency_ms)} ms`} sub={`P95 ${Math.round(llmQuality.p95_latency_ms)} ms`} color="bg-emerald-50 text-emerald-600" />
+          <StatCard icon={Coins} label="AI 成本" value={`$${llmQuality.total_cost_usd.toFixed(4)}`} sub={llmQuality.source} color="bg-amber-50 text-amber-600" />
+          <StatCard
+            icon={TrendingUp}
+            label="正向回饋率"
+            value={llmQuality.positive_feedback_rate != null ? `${(llmQuality.positive_feedback_rate * 100).toFixed(1)}%` : 'N/A'}
+            sub={`👍 ${llmQuality.positive_feedback} / 👎 ${llmQuality.negative_feedback}`}
+            color="bg-blue-50 text-blue-600"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Token usage */}
@@ -344,7 +398,7 @@ function UsersView() {
 
 // ═══ System Health ═══
 function HealthView() {
-  const [health, setHealth] = useState<any>(null)
+  const [health, setHealth] = useState<SystemHealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -358,7 +412,7 @@ function HealthView() {
   const statusColor = health.status === 'healthy' ? 'text-green-600' : 'text-yellow-600'
 
   return (
-    <div className="space-y-4 max-w-lg">
+    <div className="space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-3 mb-6">
           <StatusIcon className={`h-8 w-8 ${statusColor}`} />
@@ -372,6 +426,7 @@ function HealthView() {
           {[
             { label: '資料庫 (PostgreSQL)', status: health.database, icon: Server },
             { label: 'Redis', status: health.redis, icon: Activity },
+            { label: 'Celery Worker', status: health.task_summary.ping_ok ? 'healthy' : 'degraded', icon: Bot },
           ].map(item => (
             <div key={item.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
               <div className="flex items-center gap-2">
@@ -388,6 +443,38 @@ function HealthView() {
               </span>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">前台 API 指標 (1h)</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500">請求數</span><span className="font-medium">{health.backend_api_metrics.requests}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">5xx 錯誤率</span><span className="font-medium">{(health.backend_api_metrics.error_rate_5xx * 100).toFixed(2)}%</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">平均延遲</span><span className="font-medium">{health.backend_api_metrics.avg_latency_ms} ms</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">P95 延遲</span><span className="font-medium">{health.backend_api_metrics.p95_latency_ms} ms</span></div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">背景任務</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500">在線 worker</span><span className="font-medium">{health.task_summary.workers_online}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">執行中</span><span className="font-medium">{health.task_summary.active_tasks}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">等待中</span><span className="font-medium">{health.task_summary.queue_depth.celery ?? 0}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">批次佇列</span><span className="font-medium">{health.task_summary.queue_depth.bulk ?? 0}</span></div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-gray-700">可觀測性</h3>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500">Sentry</span><span className="font-medium">{health.observability.sentry_enabled ? '已啟用' : '未啟用'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Langfuse</span><span className="font-medium">{health.observability.langfuse_enabled ? '已啟用' : '未啟用'}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">Admin API 請求</span><span className="font-medium">{health.api_metrics.requests}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">DB 連線數</span><span className="font-medium">{health.active_connections}</span></div>
+          </div>
         </div>
       </div>
     </div>

@@ -16,12 +16,23 @@ UniHR Admin API 微服務（T4-18）
 
 import os
 import logging
+import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from app.observability.metrics import (
+    metrics_content_type,
+    observe_request,
+    record_unhandled_exception,
+    render_metrics,
+    track_in_progress,
+)
+from app.observability.sentry import init_sentry
 
 logger = logging.getLogger("unihr.admin_service")
+SERVICE_NAME = "admin-api"
+init_sentry(SERVICE_NAME)
 
 # ---------------------------------------------------------------------------
 # Service Token 認證（內部服務間通訊）
@@ -54,6 +65,7 @@ def _is_token_check_required(request: Request) -> bool:
     return not (
         path == "/health"
         or path == "/"
+        or path == "/metrics"
         or path.startswith("/docs")
         or path.startswith("/openapi.json")
     )
@@ -82,9 +94,23 @@ app = FastAPI(
 
 @app.middleware("http")
 async def enforce_service_token(request: Request, call_next):
+    start = time.perf_counter()
+    track_in_progress(SERVICE_NAME, 1)
     if _is_token_check_required(request):
         await verify_service_token(request)
-    return await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed = (time.perf_counter() - start) * 1000
+        record_unhandled_exception(SERVICE_NAME, request.method, request.url.path)
+        observe_request(SERVICE_NAME, request.method, request.url.path, 500, elapsed)
+        raise
+    finally:
+        track_in_progress(SERVICE_NAME, -1)
+
+    elapsed = (time.perf_counter() - start) * 1000
+    observe_request(SERVICE_NAME, request.method, request.url.path, response.status_code, elapsed)
+    return response
 
 # CORS（僅允許 admin frontend）
 app.add_middleware(
@@ -130,3 +156,8 @@ async def root():
         "service": "UniHR Admin API Microservice",
         "docs": "/docs",
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    return Response(content=render_metrics(), media_type=metrics_content_type())

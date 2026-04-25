@@ -1,0 +1,12 @@
+services:
+  web:
+    ports: !override
+      - "18002:8000"
+
+  frontend:
+    ports: !override
+      - "13003:80"
+
+  admin-frontend:
+    ports: !override
+      - "13004:80"

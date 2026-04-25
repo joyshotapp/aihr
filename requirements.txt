@@ -50,6 +50,8 @@ nest-asyncio>=1.6.0
 
 # ── Phase 12: LLMOps 可觀測性 ──
 langfuse>=2.0.0
+sentry-sdk>=2.27.0
+prometheus-client>=0.22.1
 
 # ── Phase 12: MCP Server ──
 mcp>=1.0.0

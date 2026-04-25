@@ -8,9 +8,10 @@ dev:
 	cp .env.development .env 2>/dev/null || true
 	docker-compose up -d --build
 	@echo "✅ Development environment running"
-	@echo "   Backend:  http://localhost:8000"
-	@echo "   Frontend: http://localhost:3001"
-	@echo "   API docs: http://localhost:8000/docs"
+	@echo "   Backend:        http://localhost:8002"
+	@echo "   Frontend:       http://localhost:3003"
+	@echo "   Admin frontend: http://localhost:3004"
+	@echo "   API docs:       http://localhost:8002/docs"
 
 # ─── Staging ───────────────────────────────
 staging:
@@ -80,7 +81,7 @@ status:
 
 health:
 	@echo "Backend:"
-	@curl -s http://localhost:8000/api/v1/admin/system/health 2>/dev/null | python3 -m json.tool || echo "  ⚠️  Not accessible"
+	@curl -s http://localhost:8002/api/v1/admin/system/health 2>/dev/null | python3 -m json.tool || echo "  ⚠️  Not accessible"
 	@echo ""
 	@echo "Frontend:"
-	@curl -so /dev/null -w "  HTTP %{http_code}\n" http://localhost:3001 2>/dev/null || echo "  ⚠️  Not accessible"
+	@curl -so /dev/null -w "  HTTP %{http_code}\n" http://localhost:3003 2>/dev/null || echo "  ⚠️  Not accessible"

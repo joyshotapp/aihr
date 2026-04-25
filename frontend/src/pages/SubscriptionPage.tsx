@@ -27,6 +27,10 @@ interface CurrentPlan {
   upgrade_available: boolean
 }
 
+function getErrorDetail(error: unknown, fallback: string) {
+  return (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback
+}
+
 const FEATURE_LABELS: Record<string, string> = {
   ai_chat: 'AI 智慧問答',
   document_upload: '文件上傳',
@@ -82,8 +86,8 @@ export default function SubscriptionPage() {
       }
       document.body.appendChild(form)
       form.submit()
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || '升級失敗')
+    } catch (error: unknown) {
+      setMsg(getErrorDetail(error, '升級失敗'))
     } finally {
       setUpgrading(false)
     }

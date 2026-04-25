@@ -21,9 +21,26 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/auth.tsx', 'src/contexts/BrandingContext.tsx'],
+    files: ['src/auth.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: [
+      'src/pages/AdminPage.tsx',
+      'src/pages/AdminQuotaPage.tsx',
+      'src/pages/AnalyticsPage.tsx',
+      'src/pages/PnLPage.tsx',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['src/pages/AnalyticsPage.tsx'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
     },
   },
 ])

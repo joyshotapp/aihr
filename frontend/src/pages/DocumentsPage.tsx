@@ -87,7 +87,6 @@ export default function DocumentsPage() {
     setUploading(true)
     setUploadTotal(files.length)
     let succeeded = 0
-    let failed = 0
     for (let i = 0; i < files.length; i++) {
       setUploadCurrent(i + 1)
       setProgress(0)
@@ -97,7 +96,6 @@ export default function DocumentsPage() {
       } catch (err: unknown) {
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '上傳失敗'
         toast.error(`${files[i].name}：${msg}`)
-        failed++
       }
     }
     if (succeeded > 0) {

@@ -19,9 +19,11 @@ from app.models.tenant import Tenant
 from app.models.document import Document
 from app.models.audit import AuditLog, UsageRecord
 from app.models.chat import Conversation
+from app.models.feedback import ChatFeedback
 from app.crud import crud_tenant
 from app.schemas.tenant import TenantUpdate, QuotaUpdate, QuotaStatus, PLAN_QUOTAS
 from app.services.quota_alerts import QuotaAlertService
+from app.observability.metrics import snapshot as metrics_snapshot
 
 router = APIRouter()
 
@@ -95,6 +97,95 @@ class SystemHealth(BaseModel):
     uptime_seconds: float
     python_version: str
     active_connections: int
+    api_metrics: dict[str, Any]
+    backend_api_metrics: dict[str, Any]
+    observability: dict[str, Any]
+    task_summary: dict[str, Any]
+
+
+class LLMQualitySummary(BaseModel):
+    tenant_id: Optional[str] = None
+    window_days: int
+    trace_count: int = 0
+    avg_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
+    total_cost_usd: float = 0.0
+    positive_feedback: int = 0
+    negative_feedback: int = 0
+    positive_feedback_rate: Optional[float] = None
+    langfuse_enabled: bool = False
+    source: str = "unavailable"
+
+
+def _count_task_items(items_by_worker: Any) -> int:
+    if not isinstance(items_by_worker, dict):
+        return 0
+    total = 0
+    for items in items_by_worker.values():
+        if isinstance(items, list):
+            total += len(items)
+    return total
+
+
+def _get_celery_task_snapshot() -> dict[str, Any]:
+    from app.celery_app import celery_app
+    from app.core.redis_client import get_redis_client
+
+    try:
+        inspect = celery_app.control.inspect(timeout=3)
+        ping = inspect.ping() if inspect else None
+        active = inspect.active() if inspect else None
+        reserved = inspect.reserved() if inspect else None
+        scheduled = inspect.scheduled() if inspect else None
+    except Exception as exc:
+        return {
+            "workers_online": 0,
+            "worker_names": [],
+            "ping_ok": False,
+            "active_tasks": 0,
+            "reserved_tasks": 0,
+            "scheduled_tasks": 0,
+            "queue_depth": {},
+            "error": str(exc),
+        }
+
+    redis_client = get_redis_client()
+    queue_depth: dict[str, int] = {}
+    if redis_client is not None:
+        for queue_name in ("celery", "bulk"):
+            try:
+                queue_depth[queue_name] = int(redis_client.llen(queue_name))
+            except Exception:
+                queue_depth[queue_name] = -1
+
+    worker_names = sorted((ping or {}).keys()) if isinstance(ping, dict) else []
+    return {
+        "workers_online": len(worker_names),
+        "worker_names": worker_names,
+        "ping_ok": bool(worker_names),
+        "active_tasks": _count_task_items(active),
+        "reserved_tasks": _count_task_items(reserved),
+        "scheduled_tasks": _count_task_items(scheduled),
+        "queue_depth": queue_depth,
+    }
+
+
+async def _fetch_backend_observability() -> dict[str, Any]:
+    from app.config import settings
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{settings.BACKEND_INTERNAL_URL.rstrip('/')}/internal/observability/summary")
+            response.raise_for_status()
+            return response.json()
+    except Exception:
+        return {
+            "service": "backend-api",
+            "api_metrics": metrics_snapshot("backend-api"),
+            "sentry_enabled": False,
+            "langfuse_enabled": False,
+        }
 
 
 # ═══════════════════════════════════════════
@@ -386,7 +477,7 @@ def search_users(
 
 
 @router.get("/system/health", response_model=SystemHealth)
-def system_health(
+async def system_health(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(require_superuser),
 ) -> Any:
@@ -415,7 +506,16 @@ def system_health(
     except Exception:
         redis_status = "unavailable"
 
-    overall = "healthy" if db_status == "healthy" else "degraded"
+    active_connections = 0
+    try:
+        active_connections = int(db.execute(text("SELECT count(*) FROM pg_stat_activity")).scalar() or 0)
+    except Exception:
+        active_connections = 0
+
+    backend_observability = await _fetch_backend_observability()
+    admin_api_metrics = metrics_snapshot("admin-api")
+    task_summary = _get_celery_task_snapshot()
+    overall = "healthy" if db_status == "healthy" and task_summary.get("ping_ok", False) else "degraded"
 
     return SystemHealth(
         status=overall,
@@ -423,7 +523,127 @@ def system_health(
         redis=redis_status,
         uptime_seconds=round(time.time() - start, 3),
         python_version=sys.version.split()[0],
-        active_connections=0,  # placeholder
+        active_connections=active_connections,
+        api_metrics=admin_api_metrics,
+        backend_api_metrics=backend_observability.get("api_metrics", {}),
+        observability={
+            "sentry_enabled": bool(backend_observability.get("sentry_enabled")),
+            "langfuse_enabled": bool(backend_observability.get("langfuse_enabled")),
+        },
+        task_summary=task_summary,
+    )
+
+
+@router.get("/system/tasks")
+def system_tasks(
+    current_user: User = Depends(require_superuser),
+) -> Any:
+    """背景任務與 queue 狀態摘要"""
+    return _get_celery_task_snapshot()
+
+
+@router.get("/llm/quality", response_model=LLMQualitySummary)
+async def llm_quality_summary(
+    tenant_id: Optional[UUID] = None,
+    days: int = Query(7, ge=1, le=30),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_superuser),
+) -> Any:
+    from app.config import settings
+    import base64
+    import httpx
+    import json
+
+    since = datetime.utcnow() - timedelta(days=days)
+    feedback_query = db.query(ChatFeedback).filter(ChatFeedback.created_at >= since)
+    if tenant_id:
+        feedback_query = feedback_query.filter(ChatFeedback.tenant_id == tenant_id)
+
+    positive_feedback = feedback_query.filter(ChatFeedback.rating == 2).count()
+    negative_feedback = feedback_query.filter(ChatFeedback.rating == 1).count()
+    total_feedback = positive_feedback + negative_feedback
+    positive_feedback_rate = round(positive_feedback / total_feedback, 4) if total_feedback else None
+
+    langfuse_enabled = bool(
+        settings.LANGFUSE_ENABLED and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY
+    )
+    if not langfuse_enabled:
+        return LLMQualitySummary(
+            tenant_id=str(tenant_id) if tenant_id else None,
+            window_days=days,
+            positive_feedback=positive_feedback,
+            negative_feedback=negative_feedback,
+            positive_feedback_rate=positive_feedback_rate,
+            langfuse_enabled=False,
+            source="feedback-only",
+        )
+
+    query: dict[str, Any] = {
+        "view": "observations",
+        "metrics": [
+            {"measure": "count", "aggregation": "count"},
+            {"measure": "latency", "aggregation": "avg"},
+            {"measure": "latency", "aggregation": "p95"},
+            {"measure": "totalCost", "aggregation": "sum"},
+        ],
+        "fromTimestamp": since.isoformat() + "Z",
+        "toTimestamp": datetime.utcnow().isoformat() + "Z",
+    }
+    if tenant_id:
+        query["filters"] = [
+            {
+                "column": "metadata",
+                "operator": "equals",
+                "key": "tenant_id",
+                "value": str(tenant_id),
+                "type": "stringObject",
+            }
+        ]
+
+    token = base64.b64encode(
+        f"{settings.LANGFUSE_PUBLIC_KEY}:{settings.LANGFUSE_SECRET_KEY}".encode("utf-8")
+    ).decode("utf-8")
+    endpoints = [
+        f"{settings.LANGFUSE_HOST.rstrip('/')}/api/public/v2/metrics",
+        f"{settings.LANGFUSE_HOST.rstrip('/')}/api/public/metrics",
+    ]
+
+    for endpoint in endpoints:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                response = await client.get(
+                    endpoint,
+                    params={"query": json.dumps(query)},
+                    headers={"Authorization": f"Basic {token}"},
+                )
+                response.raise_for_status()
+                payload = response.json()
+                rows = payload.get("data", []) if isinstance(payload, dict) else []
+                metrics = rows[0].get("metrics", {}) if rows else {}
+                return LLMQualitySummary(
+                    tenant_id=str(tenant_id) if tenant_id else None,
+                    window_days=days,
+                    trace_count=int(metrics.get("count", 0) or 0),
+                    avg_latency_ms=round(float(metrics.get("latency_avg", 0) or 0), 2),
+                    p95_latency_ms=round(float(metrics.get("latency_p95", 0) or 0), 2),
+                    total_cost_usd=round(float(metrics.get("totalCost_sum", 0) or 0), 6),
+                    positive_feedback=positive_feedback,
+                    negative_feedback=negative_feedback,
+                    positive_feedback_rate=positive_feedback_rate,
+                    langfuse_enabled=True,
+                    source="langfuse",
+                )
+        except Exception:
+            continue
+
+    return LLMQualitySummary(
+        tenant_id=str(tenant_id) if tenant_id else None,
+        window_days=days,
+        positive_feedback=positive_feedback,
+        negative_feedback=negative_feedback,
+        positive_feedback_rate=positive_feedback_rate,
+        langfuse_enabled=True,
+        source="langfuse-unreachable",
     )
 
 

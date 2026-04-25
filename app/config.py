@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     CLAMAV_FAIL_CLOSED: bool = True
     R2_ENDPOINT: str = ""
     R2_BUCKET: str = "aihr-uploads"
+    AUTO_PROVISION_CLOUD_RESOURCES: bool = False
 
     # Pinecone（向量資料庫）
     PINECONE_API_KEY: str = ""
@@ -182,6 +183,7 @@ class Settings(BaseSettings):
     # Billing / payment links
     BILLING_CONTACT_URL: str = "mailto:sales@aihr.app"
     BACKEND_BASE_URL: str = "http://localhost:8000"
+    BACKEND_INTERNAL_URL: str = "http://localhost:8000"
 
     # NewebPay 藍新金流
     NEWEBPAY_MERCHANT_ID: str = ""
@@ -218,6 +220,13 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    LANGFUSE_METRICS_WINDOW_DAYS: int = 7
+
+    # Sentry
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_PROFILES_SAMPLE_RATE: float = 0.0
 
     # MCP Server
     MCP_ENABLED: bool = False

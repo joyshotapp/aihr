@@ -19,8 +19,10 @@ from app.logging_config import (
     tenant_id_ctx,
     user_id_ctx,
 )
+from app.observability.metrics import observe_request, record_unhandled_exception, track_in_progress
 
 logger = logging.getLogger("unihr.request")
+SERVICE_NAME = "backend-api"
 
 
 def _extract_user_context(request: Request) -> tuple[str, str]:
@@ -65,15 +67,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         logger.info("→ %s %s from %s", method, path, client_ip)
 
         start = time.perf_counter()
+        track_in_progress(SERVICE_NAME, 1)
         try:
             response = await call_next(request)
         except Exception:
             elapsed = (time.perf_counter() - start) * 1000
+            record_unhandled_exception(SERVICE_NAME, method, path)
+            observe_request(SERVICE_NAME, method, path, 500, elapsed)
             logger.exception("✗ %s %s — %.1fms (unhandled exception)", method, path, elapsed)
             raise
+        finally:
+            track_in_progress(SERVICE_NAME, -1)
 
         elapsed = (time.perf_counter() - start) * 1000
         response.headers["X-Request-ID"] = rid
+        observe_request(SERVICE_NAME, method, path, response.status_code, elapsed)
 
         logger.info(
             "← %s %s — %d — %.1fms",

@@ -575,6 +575,7 @@ FastAPI metrics → 監控指標 (scrape) → 監控頁面 (dashboard)
 ```
 
 - **監控指標**：每 15 秒抓取 `/metrics` 端點；啟用 node-exporter、postgres-exporter、redis-exporter、celery-exporter
+- **目前可抓取來源**：主站 gateway `http://localhost/metrics` 會轉到 backend metrics，admin gateway `http://localhost:8080/metrics` 會轉到 admin-api metrics
 - **監控頁面**：預配置資料來源與儀錶板（自動 provisioning）
 - **告警規則**：16 條規則分 4 組 — `unihr-backend`（高錯誤率/延遲/服務停機）、`unihr-security`（認證失敗激增/速率限制濫用）、`unihr-infrastructure`（Redis/PG 停機、磁碟/記憶體告警）、`unihr-celery`（Worker 停機/佇列積壓/失敗率）
 
@@ -622,17 +623,23 @@ docker-compose exec web python scripts/batch_upload.py
 
 # 8. 執行測試套件驗證（選用）
 docker-compose exec web python scripts/run_tests.py
+
+# 9. 檢查雲端資源是否已就緒（選用，但上線前建議）
+python scripts/provision_cloud_resources.py --check-only
+
+# 10. 跑一輪可重複的上市前 preflight（建議）
+python scripts/release_preflight.py --include-audit
 ```
 
 啟動後：
-- **後端 API**：http://localhost:8000
-- **API 文件**：http://localhost:8000/docs（Swagger UI 互動式文件）
-- **前端介面**：http://localhost:3001（使用 FIRST_SUPERUSER_EMAIL / FIRST_SUPERUSER_PASSWORD 登入）
-- **Admin API**：http://localhost:8001
-- **Admin 文件**：http://localhost:8001/docs
+- **後端 API（Docker Compose）**：http://localhost:8002
+- **API 文件（Docker Compose）**：http://localhost:8002/docs（Swagger UI 互動式文件）
+- **前端介面（Docker Compose）**：http://localhost:3003
+- **Admin 前端（Docker Compose）**：http://localhost:3004
+- **若用非 Docker 啟動**：後端仍為 `http://localhost:8000`、前端 dev server 為 `http://localhost:3001`、Admin API 為 `http://localhost:8001`
 
 **首次使用建議**：
-1. 前往 http://localhost:3001 登入後台
+1. 前往 `http://localhost:3003`（Docker）或 `http://localhost:3001`（非 Docker）登入
 2. 上傳 1-2 份測試文件（PDF / DOCX / TXT）
 3. 等待文件處理完成（查看「知識庫管理」頁面狀態）
 4. 前往「AI 問答」頁面測試提問
@@ -1333,28 +1340,46 @@ Copy-Item redis_data/dump.rdb redis_backup.rdb
 
 ### 部署後驗證
 
+> **重要：staging / production rehearsal 需等雲端部署後執行。**  
+> 本地 preflight 只能證明程式碼、build、compose config 與基本測試可通過；真實網域、SSL、GitHub Actions deploy、雲端 secrets、gateway、rollback、備份還原與外部服務連線，必須在 staging 或 production 類雲端環境才驗證得出來。
+
 ```powershell
 # 1. 檢查所有容器運行狀態
 docker compose -f docker-compose.prod.yml ps
 
-# 2. 健康檢查
+# 2. 健康檢查與 gateway 路由
 curl https://app.yourcompany.com/health
 curl https://admin.yourcompany.com/health
+curl https://app.yourcompany.com/api/v1/openapi.json
 
-# 3. 測試登入
+# 3. 確認監控端點
+curl https://app.yourcompany.com/metrics
+curl https://admin.yourcompany.com/metrics
+
+# 4. 測試登入
 # 前往 https://app.yourcompany.com/login
 # 使用 FIRST_SUPERUSER_EMAIL / PASSWORD 登入
 
-# 4. 檢查資料庫遷移
+# 5. 檢查資料庫遷移
 docker compose -f docker-compose.prod.yml exec web alembic current
 
-# 5. 檢查 Celery Worker
+# 6. 檢查 Celery Worker
 docker compose -f docker-compose.prod.yml logs worker --tail=20
 
-# 6. 檢查監控
+# 7. 檢查監控
 # 前往 https://監控頁面.yourcompany.com
 # 使用 監控頁面_PASSWORD 登入
 ```
+
+雲端 rehearsal 完成前，請至少確認：
+
+- [ ] GitHub Actions deploy workflow 能成功部署到目標環境
+- [ ] 真實 DNS / SSL / HTTPS cookie / CORS 設定正常
+- [ ] 前台、Admin、API、登入、文件上傳、AI 問答 smoke test 通過
+- [ ] `/metrics`、Sentry、Langfuse、Admin 健康頁均可看到資料
+- [ ] Production compose 在目標機器可正常啟動，且 secrets / service token 正確
+- [ ] 備份與 sandbox restore drill 已實際跑過並留下紀錄
+- [ ] Rollback 流程已演練，確認可回復到上一版
 
 ### 每日檢查
 

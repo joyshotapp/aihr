@@ -18,6 +18,10 @@ interface BrandingData {
   brand_favicon_url: string
 }
 
+function getErrorMessage(error: unknown) {
+  return (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '操作失敗'
+}
+
 export default function BrandingPage() {
   const [form, setForm] = useState<BrandingData>(DEFAULT_BRANDING)
   const [saving, setSaving] = useState(false)
@@ -44,8 +48,8 @@ export default function BrandingPage() {
       await companyApi.updateBranding(DEFAULT_BRANDING as unknown as Record<string, unknown>)
       setForm(DEFAULT_BRANDING)
       setMsg('已恢復原廠設定。')
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || '重置失敗')
+    } catch (error: unknown) {
+      setMsg(getErrorMessage(error) || '重置失敗')
     } finally {
       setResetting(false)
     }
@@ -57,8 +61,8 @@ export default function BrandingPage() {
     try {
       await companyApi.updateBranding(form as unknown as Record<string, unknown>)
       setMsg('品牌設定已儲存成功！下次載入時將套用新設定。')
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || '儲存失敗')
+    } catch (error: unknown) {
+      setMsg(getErrorMessage(error) || '儲存失敗')
     } finally {
       setSaving(false)
     }

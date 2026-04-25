@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api.v1.api import api_router
@@ -11,81 +12,21 @@ from app.middleware.request_logging import RequestLoggingMiddleware
 from app.middleware.custom_domain import CustomDomainMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.logging_config import setup_logging
+from app.observability.metrics import metrics_content_type, render_metrics, snapshot
+from app.observability.sentry import init_sentry
+from app.services.cloud_provisioning import provision_cloud_resources
 import logging
 
 # ── Initialize structured logging ──
 setup_logging()
+init_sentry("backend-api")
 logger = logging.getLogger(__name__)
-
-
-def _ensure_pinecone_index():
-    """
-    啟動時確認 Pinecone 索引存在，若不存在則自動建立。
-    絕對不會修改或刪除任何現有索引。
-    """
-    api_key = getattr(settings, "PINECONE_API_KEY", "")
-    index_name = getattr(settings, "PINECONE_INDEX_NAME", "aihr-vectors")
-    dimension = getattr(settings, "EMBEDDING_DIMENSION", 1024)
-    if not api_key:
-        logger.warning("PINECONE_API_KEY 未設定，跳過索引檢查")
-        return
-    try:
-        from pinecone import Pinecone, ServerlessSpec
-
-        pc = Pinecone(api_key=api_key)
-        existing = [idx.name for idx in pc.list_indexes()]
-        if index_name in existing:
-            logger.info(f"Pinecone 索引 '{index_name}' 已存在，跳過建立")
-        else:
-            logger.info(f"Pinecone 索引 '{index_name}' 不存在，自動建立（dimension={dimension}）")
-            pc.create_index(
-                name=index_name,
-                dimension=dimension,
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-            )
-            logger.info(f"Pinecone 索引 '{index_name}' 建立成功")
-    except Exception as e:
-        logger.warning(f"Pinecone 索引檢查/建立失敗（不影響啟動）: {e}")
-
-
-def _ensure_r2_bucket():
-    """
-    啟動時確認 R2 bucket 存在，若不存在則自動建立。
-    絕對不會修改或刪除任何現有 bucket。
-    """
-    endpoint = getattr(settings, "R2_ENDPOINT", "")
-    access_key = getattr(settings, "R2_ACCESS_KEY_ID", "")
-    secret_key = getattr(settings, "R2_SECRET_ACCESS_KEY", "")
-    bucket = getattr(settings, "R2_BUCKET", "aihr-uploads")
-    if not all([endpoint, access_key, secret_key]):
-        logger.warning("R2 憑證未完整設定，跳過 bucket 檢查")
-        return
-    try:
-        import boto3
-
-        s3 = boto3.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            region_name="auto",
-        )
-        existing = [b["Name"] for b in s3.list_buckets().get("Buckets", [])]
-        if bucket in existing:
-            logger.info(f"R2 bucket '{bucket}' 已存在，跳過建立")
-        else:
-            logger.info(f"R2 bucket '{bucket}' 不存在，自動建立")
-            s3.create_bucket(Bucket=bucket)
-            logger.info(f"R2 bucket '{bucket}' 建立成功")
-    except Exception as e:
-        logger.warning(f"R2 bucket 檢查/建立失敗（不影響啟動）: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _ensure_pinecone_index()
-    _ensure_r2_bucket()
+    for result in provision_cloud_resources(create_missing=settings.AUTO_PROVISION_CLOUD_RESOURCES):
+        logger.info("Cloud resource status: %s", result)
     yield
 
 
@@ -158,3 +99,20 @@ def health_check():
 def api_versions():
     """Return supported API versions and their status."""
     return API_VERSIONS
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(content=render_metrics(), media_type=metrics_content_type())
+
+
+@app.get("/internal/observability/summary", include_in_schema=False)
+def observability_summary():
+    return {
+        "service": "backend-api",
+        "api_metrics": snapshot("backend-api"),
+        "sentry_enabled": bool(settings.SENTRY_DSN),
+        "langfuse_enabled": bool(
+            settings.LANGFUSE_ENABLED and settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY
+        ),
+    }

@@ -3,6 +3,104 @@ import type { User } from './types'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
+export interface RequestMetricsSummary {
+  window_seconds: number
+  requests: number
+  server_errors: number
+  client_errors: number
+  error_rate_5xx: number
+  error_rate_4xx: number
+  avg_latency_ms: number
+  p95_latency_ms: number
+}
+
+export interface SystemTaskSummary {
+  workers_online: number
+  worker_names: string[]
+  ping_ok: boolean
+  active_tasks: number
+  reserved_tasks: number
+  scheduled_tasks: number
+  queue_depth: Record<string, number>
+  error?: string
+}
+
+export interface SystemHealthResponse {
+  status: string
+  database: string
+  redis: string
+  uptime_seconds: number
+  python_version: string
+  active_connections: number
+  api_metrics: RequestMetricsSummary
+  backend_api_metrics: RequestMetricsSummary
+  observability: {
+    sentry_enabled: boolean
+    langfuse_enabled: boolean
+  }
+  task_summary: SystemTaskSummary
+}
+
+export interface TenantSummary {
+  id: string
+  name: string
+  plan: string | null
+  status: string | null
+  created_at: string | null
+  user_count: number
+  document_count: number
+  total_actions: number
+  total_cost: number
+}
+
+export interface TenantUserSummary {
+  id: string
+  email: string
+  full_name?: string | null
+  role?: string | null
+  status?: string | null
+}
+
+export interface TenantRecentAction {
+  id: string
+  action: string
+  actor_user_id?: string | null
+  created_at?: string | null
+}
+
+export interface TenantStatsResponse {
+  tenant_id: string
+  tenant_name: string
+  plan: string | null
+  status: string | null
+  created_at: string | null
+  user_count: number
+  document_count: number
+  conversation_count: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_pinecone_queries: number
+  total_embedding_calls: number
+  total_cost: number
+  total_actions: number
+  recent_actions: TenantRecentAction[]
+  users: TenantUserSummary[]
+}
+
+export interface LLMQualitySummary {
+  tenant_id?: string | null
+  window_days: number
+  trace_count: number
+  avg_latency_ms: number
+  p95_latency_ms: number
+  total_cost_usd: number
+  positive_feedback: number
+  negative_feedback: number
+  positive_feedback_rate?: number | null
+  langfuse_enabled: boolean
+  source: string
+}
+
 // ─── Request interceptor: attach JWT ───
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('admin_token')
@@ -40,11 +138,13 @@ export const authApi = {
 // ─── Platform Admin ───
 export const adminApi = {
   dashboard: () => api.get('/admin/dashboard').then(r => r.data),
-  tenants: (params?: Record<string, string>) => api.get('/admin/tenants', { params }).then(r => r.data),
-  tenantStats: (id: string) => api.get(`/admin/tenants/${id}/stats`).then(r => r.data),
+  tenants: (params?: Record<string, string>) => api.get<TenantSummary[]>('/admin/tenants', { params }).then(r => r.data),
+  tenantStats: (id: string) => api.get<TenantStatsResponse>(`/admin/tenants/${id}/stats`).then(r => r.data),
   updateTenant: (id: string, data: Record<string, unknown>) => api.put(`/admin/tenants/${id}`, data).then(r => r.data),
   users: (params?: Record<string, string>) => api.get('/admin/users', { params }).then(r => r.data),
-  systemHealth: () => api.get('/admin/system/health').then(r => r.data),
+  systemHealth: () => api.get<SystemHealthResponse>('/admin/system/health').then(r => r.data),
+  systemTasks: () => api.get<SystemTaskSummary>('/admin/system/tasks').then(r => r.data),
+  llmQuality: (params?: Record<string, string>) => api.get<LLMQualitySummary>('/admin/llm/quality', { params }).then(r => r.data),
   // ─ Quota Management ─
   tenantQuota: (id: string) => api.get(`/admin/tenants/${id}/quota`).then(r => r.data),
   updateQuota: (id: string, data: Record<string, unknown>) => api.put(`/admin/tenants/${id}/quota`, data).then(r => r.data),

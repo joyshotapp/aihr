@@ -9,6 +9,65 @@ import {
 
 type Tab = 'dashboard' | 'users' | 'quota' | 'usage' | 'security'
 
+interface CompanyQuotaData {
+  plan?: string | null
+  current_users: number
+  max_users: number | null
+  users_usage_ratio: number | null
+  current_documents: number
+  max_documents: number | null
+  documents_usage_ratio: number | null
+  current_monthly_queries: number
+  monthly_query_limit: number | null
+  queries_usage_ratio: number | null
+  current_monthly_tokens: number
+  monthly_token_limit: number | null
+  tokens_usage_ratio: number | null
+  current_storage_mb: number
+  max_storage_mb: number | null
+  storage_usage_ratio: number | null
+  is_over_quota: boolean
+  quota_warnings?: string[]
+}
+
+interface CompanyDashboardData {
+  user_count: number
+  document_count: number
+  conversation_count: number
+  monthly_queries: number
+  monthly_cost?: number
+  quota_status?: CompanyQuotaData | null
+}
+
+interface CompanyUserSummary {
+  id: string
+  email: string
+  full_name?: string | null
+  role?: string | null
+  status?: string | null
+  created_at?: string | null
+}
+
+interface CompanyUsageSummary {
+  total_actions: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_pinecone_queries: number
+  total_cost?: number
+}
+
+interface CompanyUsageByUser {
+  full_name?: string | null
+  email: string
+  monthly_queries: number
+  monthly_tokens?: number
+  monthly_cost?: number
+}
+
+function getErrorDetail(error: unknown, fallback: string) {
+  return (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback
+}
+
 // ─── Shared ───
 function Loader() {
   return <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>
@@ -52,7 +111,7 @@ function UsageBar({ label, current, limit, ratio }: { label: string; current: nu
 
 // ═══ Dashboard Tab ═══
 function DashboardTab() {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<CompanyDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -106,7 +165,7 @@ function DashboardTab() {
 
 // ═══ Users Tab ═══
 function UsersTab() {
-  const [users, setUsers] = useState<any[]>([])
+  const [users, setUsers] = useState<CompanyUserSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee' })
@@ -132,8 +191,8 @@ function UsersTab() {
       setShowInvite(false)
       setMsg('邀請信已寄出，對方可透過 Email 完成啟用')
       load()
-    } catch (err: any) {
-      setMsg(err.response?.data?.detail || '邀請失敗')
+    } catch (error: unknown) {
+      setMsg(getErrorDetail(error, '邀請失敗'))
     }
     finally { setSubmitting(false) }
   }
@@ -228,7 +287,7 @@ function UsersTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {users.map((u: any) => (
+              {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-5 py-3 text-sm text-gray-900">{u.email}</td>
                   <td className="px-5 py-3 text-sm text-gray-600">{u.full_name || '—'}</td>
@@ -298,7 +357,7 @@ function DropdownMenu({ onEdit, onDeactivate, disabled }: { onEdit: () => void; 
 
 // ═══ Quota Tab ═══
 function QuotaTab() {
-  const [quota, setQuota] = useState<any>(null)
+  const [quota, setQuota] = useState<CompanyQuotaData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -346,8 +405,8 @@ function QuotaTab() {
 
 // ═══ Usage Tab ═══
 function UsageTab() {
-  const [summary, setSummary] = useState<any>(null)
-  const [byUser, setByUser] = useState<any[]>([])
+  const [summary, setSummary] = useState<CompanyUsageSummary | null>(null)
+  const [byUser, setByUser] = useState<CompanyUsageByUser[]>([])
   const [loading, setLoading] = useState(true)
   const [showByUser, setShowByUser] = useState(false)
 
@@ -394,7 +453,7 @@ function UsageTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {byUser.map((u: any, i: number) => (
+              {byUser.map((u, i: number) => (
                 <tr key={i} className="hover:bg-gray-50">
                   <td className="px-5 py-2">
                     <p className="text-sm font-medium text-gray-900">{u.full_name || u.email}</p>
@@ -438,8 +497,8 @@ function SecurityTab() {
     try {
       const result = await authApi.mfaSetup()
       setSetup(result)
-    } catch (err: any) {
-      setMessage(err.response?.data?.detail || '無法產生 2FA 設定')
+    } catch (error: unknown) {
+      setMessage(getErrorDetail(error, '無法產生 2FA 設定'))
     } finally {
       setSubmitting(false)
     }
@@ -456,8 +515,8 @@ function SecurityTab() {
       setSetup(null)
       setCode('')
       setMessage('2FA 已啟用，之後登入將需要驗證碼')
-    } catch (err: any) {
-      setMessage(err.response?.data?.detail || '啟用 2FA 失敗')
+    } catch (error: unknown) {
+      setMessage(getErrorDetail(error, '啟用 2FA 失敗'))
     } finally {
       setSubmitting(false)
     }
@@ -473,8 +532,8 @@ function SecurityTab() {
       setPassword('')
       setDisableCode('')
       setMessage('2FA 已停用')
-    } catch (err: any) {
-      setMessage(err.response?.data?.detail || '停用 2FA 失敗')
+    } catch (error: unknown) {
+      setMessage(getErrorDetail(error, '停用 2FA 失敗'))
     } finally {
       setSubmitting(false)
     }

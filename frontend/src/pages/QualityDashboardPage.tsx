@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { companyApi } from '../api'
 import { Loader2, FileBarChart, Search, AlertTriangle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -52,14 +52,21 @@ export default function QualityDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [days, setDays] = useState(30)
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     setLoading(true)
-    companyApi
-      .qualityDashboard(days)
-      .then(setData)
-      .catch(() => toast.error('載入品質儀表板失敗'))
-      .finally(() => setLoading(false))
+    try {
+      const result = await companyApi.qualityDashboard(days)
+      setData(result)
+    } catch {
+      toast.error('載入品質儀表板失敗')
+    } finally {
+      setLoading(false)
+    }
   }, [days])
+
+  useEffect(() => {
+    void load()
+  }, [load])
 
   if (loading) {
     return (

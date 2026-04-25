@@ -16,51 +16,52 @@ export default function SSOCallbackPage() {
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    const state = params.get('state') || ''
+    void (async () => {
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      const state = params.get('state') || ''
 
-    const tenantId = sessionStorage.getItem('sso_tenant_id') || ''
-    const provider = sessionStorage.getItem('sso_provider') || ''
-    const storedState = sessionStorage.getItem('sso_state') || ''
-    const codeVerifier = sessionStorage.getItem('sso_code_verifier') || ''
-    const redirectUri = `${window.location.origin}/login/callback`
+      const tenantId = sessionStorage.getItem('sso_tenant_id') || ''
+      const provider = sessionStorage.getItem('sso_provider') || ''
+      const storedState = sessionStorage.getItem('sso_state') || ''
+      const codeVerifier = sessionStorage.getItem('sso_code_verifier') || ''
+      const redirectUri = `${window.location.origin}/login/callback`
 
-    if (!code) {
-      setStatus('error')
-      setErrorMsg('未收到授權碼（code），請重新嘗試 SSO 登入。')
-      return
-    }
-    if (!tenantId || !provider) {
-      setStatus('error')
-      setErrorMsg('缺少租戶 ID 或 SSO 提供者資訊，請重新嘗試。')
-      return
-    }
-    if (!state || !storedState || state !== storedState) {
-      setStatus('error')
-      setErrorMsg('SSO 驗證狀態不一致，請重新嘗試。')
-      return
-    }
-    if (!codeVerifier) {
-      setStatus('error')
-      setErrorMsg('缺少 PKCE 驗證資訊，請重新嘗試。')
-      return
-    }
+      if (!code) {
+        setStatus('error')
+        setErrorMsg('未收到授權碼（code），請重新嘗試 SSO 登入。')
+        return
+      }
+      if (!tenantId || !provider) {
+        setStatus('error')
+        setErrorMsg('缺少租戶 ID 或 SSO 提供者資訊，請重新嘗試。')
+        return
+      }
+      if (!state || !storedState || state !== storedState) {
+        setStatus('error')
+        setErrorMsg('SSO 驗證狀態不一致，請重新嘗試。')
+        return
+      }
+      if (!codeVerifier) {
+        setStatus('error')
+        setErrorMsg('缺少 PKCE 驗證資訊，請重新嘗試。')
+        return
+      }
 
-    loginWithSSO(code, redirectUri, tenantId, provider, state, codeVerifier)
-      .then(() => {
+      try {
+        await loginWithSSO(code, redirectUri, tenantId, provider, state, codeVerifier)
         toast.success('SSO 登入成功')
         sessionStorage.removeItem('sso_tenant_id')
         sessionStorage.removeItem('sso_provider')
         sessionStorage.removeItem('sso_state')
         sessionStorage.removeItem('sso_code_verifier')
         navigate('/app', { replace: true })
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'SSO 登入失敗'
         setStatus('error')
         setErrorMsg(msg)
-      })
+      }
+    })()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
