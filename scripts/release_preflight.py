@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -11,6 +12,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _compose_cmd() -> list[str]:
+    """Return the correct Docker Compose CLI for this environment.
+
+    Prefer `docker compose` (plugin) when available; fall back to the
+    standalone `docker-compose` binary otherwise.
+    """
+    try:
+        subprocess.run(
+            ["docker", "compose", "version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=5,
+        )
+        return ["docker", "compose"]
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        if shutil.which("docker-compose"):
+            return ["docker-compose"]
+    raise RuntimeError(
+        "No Docker Compose CLI found. Install Docker Desktop or the docker-compose standalone binary."
+    )
+
+
 @dataclass
 class Check:
     name: str
@@ -18,6 +42,7 @@ class Check:
     cwd: Path
     timeout: int = 600
     env_overrides: dict[str, str] | None = None
+    stub_files: list[Path] | None = None  # created before run, deleted after if they didn't previously exist
 
 
 def build_checks(include_audit: bool, include_db_tests: bool) -> list[Check]:
@@ -44,16 +69,18 @@ def build_checks(include_audit: bool, include_db_tests: bool) -> list[Check]:
             ROOT,
             timeout=300,
         ),
-        Check("Compose Dev Config", ["docker", "compose", "-f", "docker-compose.yml", "config"], ROOT),
+        Check("Compose Dev Config", [*_compose_cmd(), "-f", "docker-compose.yml", "config"], ROOT),
         Check(
             "Compose Prod Config",
-            ["docker", "compose", "-f", "docker-compose.prod.yml", "config"],
+            [*_compose_cmd(), "-f", "docker-compose.prod.yml", "config"],
             ROOT,
             env_overrides={
                 "POSTGRES_PASSWORD": "preflight-placeholder",
                 "REDIS_PASSWORD": "preflight-placeholder",
                 "ADMIN_REDIS_PASSWORD": "preflight-placeholder",
+                "ADMIN_SERVICE_TOKEN": "preflight-placeholder",
             },
+            stub_files=[ROOT / ".env.production"],
         ),
     ]
 
@@ -94,6 +121,15 @@ def run_check(check: Check) -> bool:
     env = os.environ.copy()
     if check.env_overrides:
         env.update(check.env_overrides)
+
+    # Create stub files that are required by the command but should not persist
+    stubs_created: list[Path] = []
+    if check.stub_files:
+        for stub in check.stub_files:
+            if not stub.exists():
+                stub.touch()
+                stubs_created.append(stub)
+
     try:
         subprocess.run(
             command,
@@ -115,6 +151,9 @@ def run_check(check: Check) -> bool:
     except subprocess.CalledProcessError as exc:
         print(f"[FAIL] {check.name} exited with code {exc.returncode}")
         return False
+    finally:
+        for stub in stubs_created:
+            stub.unlink(missing_ok=True)
 
 
 def main() -> int:

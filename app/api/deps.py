@@ -59,6 +59,7 @@ def get_current_user(
         path = request.url.path
         _ALLOWED_SUPERUSER_PATHS = (
             "/api/v1/admin",
+            "/api/v1/analytics",
             "/api/v1/users/me",
             "/api/v1/auth",
             "/api/v2/admin",

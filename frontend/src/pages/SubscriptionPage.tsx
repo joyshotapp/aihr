@@ -82,8 +82,9 @@ export default function SubscriptionPage() {
       }
       document.body.appendChild(form)
       form.submit()
-    } catch (e: any) {
-      setMsg(e?.response?.data?.detail || '升級失敗')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      setMsg(err?.response?.data?.detail || '升級失敗')
     } finally {
       setUpgrading(false)
     }

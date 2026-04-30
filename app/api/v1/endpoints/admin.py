@@ -22,7 +22,7 @@ from app.models.chat import Conversation
 from app.models.feedback import ChatFeedback
 from app.crud import crud_tenant
 from app.schemas.tenant import TenantUpdate, QuotaUpdate, QuotaStatus, PLAN_QUOTAS
-from app.services.quota_alerts import QuotaAlertService
+from app.services.quota_alerts import QuotaAlertService, QuotaAlert
 from app.observability.metrics import snapshot as metrics_snapshot
 
 router = APIRouter()
@@ -500,7 +500,13 @@ async def system_health(
     try:
         from app.config import settings
 
-        r = redis_lib.Redis.from_url(settings.CELERY_BROKER_URL)
+        r = redis_lib.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            password=settings.REDIS_PASSWORD,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
         r.ping()
         r.close()
     except Exception:
@@ -772,6 +778,59 @@ def list_plan_quotas(
 ) -> Any:
     """列出所有方案預設配額"""
     return PLAN_QUOTAS
+
+
+# ═══════════════════════════════════════════
+#  Monitoring Center（跨租戶聚合）
+# ═══════════════════════════════════════════
+
+
+@router.get("/monitoring/alerts")
+def get_monitoring_alerts(
+    alert_type: Optional[str] = None,
+    resource: Optional[str] = None,
+    days: int = Query(7, ge=1, le=30),
+    limit: int = Query(200, le=500),
+    db: Session = Depends(deps.get_db),
+    current_user: User = Depends(require_superuser),
+) -> Any:
+    """跨租戶配額告警聚合，供監控中心使用。"""
+    since = datetime.utcnow() - timedelta(days=days)
+    q = (
+        db.query(QuotaAlert, Tenant.name.label("tenant_name"))
+        .join(Tenant, Tenant.id == QuotaAlert.tenant_id)
+        .filter(QuotaAlert.created_at >= since)
+    )
+    if alert_type:
+        q = q.filter(QuotaAlert.alert_type == alert_type)
+    if resource:
+        q = q.filter(QuotaAlert.resource == resource)
+
+    rows = q.order_by(QuotaAlert.created_at.desc()).limit(limit).all()
+
+    alerts = [
+        {
+            "id": str(a.id),
+            "tenant_id": str(a.tenant_id),
+            "tenant_name": tenant_name,
+            "alert_type": a.alert_type,
+            "resource": a.resource,
+            "current_value": a.current_value,
+            "limit_value": a.limit_value,
+            "usage_ratio": a.usage_ratio,
+            "message": a.message,
+            "notified": a.notified,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a, tenant_name in rows
+    ]
+
+    return {
+        "total": len(alerts),
+        "exceeded_count": sum(1 for a in alerts if a["alert_type"] == "exceeded"),
+        "warning_count": sum(1 for a in alerts if a["alert_type"] == "warning"),
+        "alerts": alerts,
+    }
 
 
 # ═══════════════════════════════════════════

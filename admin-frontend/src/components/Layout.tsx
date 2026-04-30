@@ -1,10 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth'
-import { LogOut, ServerCog, Gauge, TrendingUp, Shield, DollarSign } from 'lucide-react'
+import { LogOut, ServerCog, Gauge, TrendingUp, Shield, DollarSign, Bell } from 'lucide-react'
 import clsx from 'clsx'
 
 const navItems = [
   { to: '/', icon: ServerCog, label: '平台管理' },
+  { to: '/monitoring', icon: Bell, label: '監控中心' },
   { to: '/pnl', icon: DollarSign, label: '收支總覽' },
   { to: '/quotas', icon: Gauge, label: '配額管理' },
   { to: '/analytics', icon: TrendingUp, label: '成本分析' },

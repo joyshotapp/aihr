@@ -40,10 +40,10 @@
 
 | 頁面 | URL | 說明 |
 |------|-----|------|
-| **前台銷售頁** | `http://172.235.216.122/` | 公開首頁、定價、登入／註冊（port 80） |
-| **使用者工作台** | `http://172.235.216.122/app` | 登入後 HR／員工操作介面（port 80） |
-| **系統管理後台** | `http://172.235.216.122:8080/` | 平台維運 Admin Panel（port 8080） |
-| **API Swagger** | `http://172.235.216.122/api/v1/docs` | OpenAPI 互動文件 |
+| **前台銷售頁** | `http://<YOUR_SERVER_IP>/` | 公開首頁、定價、登入／註冊（port 80） |
+| **使用者工作台** | `http://<YOUR_SERVER_IP>/app` | 登入後 HR／員工操作介面（port 80） |
+| **系統管理後台** | `http://<YOUR_SERVER_IP>:8080/` | 平台維運 Admin Panel（port 8080） |
+| **API Swagger** | `http://<YOUR_SERVER_IP>/api/v1/docs` | OpenAPI 互動文件 |
 
 > ⚠️ **管理後台帳號與密碼不記錄於版本控制。**
 > 相關資訊請查閱 Linode 機器上的 `/opt/aihr/.env.production`，或詢問有權限的維運人員。
@@ -60,10 +60,10 @@ docker-compose exec web python scripts/initial_data.py
 ### 4) 跑一次最準的雲端 E2E（建議 RD）
 
 ```powershell
-$env:AIHR_BASE_URL="http://172.235.216.122"
+$env:AIHR_BASE_URL="http://<YOUR_SERVER_IP>"
 $env:AIHR_SUPERUSER_EMAIL="<你的superuser email>"
 $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
-C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
+.venv/Scripts/python.exe scripts/live_e2e_test.py
 ```
 
 ### 5) 檢查本地與 Linode 設定一致性（建議上線前）
@@ -73,7 +73,7 @@ C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
 python scripts/check_local_cloud_parity.py
 
 # 同時比對 Linode /opt/aihr/.env.production（遮罩顯示）
-python scripts/check_local_cloud_parity.py --host 172.235.216.122 --user root --key C:/Users/User/.ssh/id_ed25519_aihr
+python scripts/check_local_cloud_parity.py --host <YOUR_SERVER_IP> --user root --key ~/.ssh/id_ed25519_aihr
 ```
 
 ### 6) 前端公開站 / 工作台路由速記
@@ -96,7 +96,7 @@ npm run verify:surface -- --base-url http://127.0.0.1:4173 --dist-dir dist
 
 ```powershell
 cd frontend
-$env:FRONTEND_VERIFY_BASE_URL="http://172.235.216.122"
+$env:FRONTEND_VERIFY_BASE_URL="http://<YOUR_SERVER_IP>"
 npm run verify:surface -- --dist-dir dist
 ```
 
@@ -684,11 +684,11 @@ docker-compose exec web python scripts/create_test_users.py
 
 ---
 
-### 生產環境帳號（Linode `172.235.216.122`）
+### 生產環境帳號（雲端伺服器）
 
 > ⚠️ 生產環境帳號密碼**不記錄於版本控制**。查閱方式：
 > ```bash
-> ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122 "grep FIRST_SUPERUSER /opt/aihr/.env.production"
+> ssh -i ~/.ssh/id_ed25519_aihr root@<YOUR_SERVER_IP> "grep FIRST_SUPERUSER /opt/aihr/.env.production"
 > ```
 
 | 角色 | 取得方式 |
@@ -1351,9 +1351,21 @@ Copy-Item redis_data/dump.rdb redis_backup.rdb
 
 ## 生產環境維運檢查清單
 
-### ⚠️ 上線前人工必辦（2026-04-12 審查後遺留）
+### ⚠️ 上線前人工必辦（2026-04-30 審查後更新）
 
-以下 4 項無法純靠程式碼自動解決，**必須在正式開賣前完成並留下驗收紀錄**：
+以下項目為 [OPERATION_READINESS_REVIEW_2026-04-30.md](docs/OPERATION_READINESS_REVIEW_2026-04-30.md) 識別的待辦：
+
+#### 已完成（2026-04-30）
+
+| # | 項目 | 說明 |
+|---|---|---|
+| **✅** | Worker healthcheck 假陽性 | `docker-compose.prod.yml` 移除 `|| exit 0`，失敗即 unhealthy |
+| **✅** | PricingPage CTA 信箱 | `sales@example.com` → `sales@aihr.app` |
+| **✅** | Frontend lint any 違規 | `api.ts` 5 個 + `SubscriptionPage.tsx` 1 個，全部修正 |
+| **✅** | Release preflight compose CLI | 自動偵測 `docker-compose` / `docker compose` |
+| **✅** | README live IP 外洩 | 所有伺服器 IP 已改為 `<YOUR_SERVER_IP>` placeholder |
+
+#### 仍需人工完成（正式開賣前必辦）
 
 | # | 項目 | 說明 |
 |---|---|---|
@@ -1361,8 +1373,10 @@ Copy-Item redis_data/dump.rdb redis_backup.rdb
 | **B** | 正式部署安全驗證 | 在伺服器上實際確認：TLS 已啟用、HTTPS-only cookie（`Secure` flag）、資料庫 SSL 連線（`POSTGRES_SSL_MODE=require`）、管理後台 IP 白名單（`ADMIN_IP_WHITELIST_ENABLED=true`）均生效，並截圖或輸出留存 |
 | **C** | E2E 測試實際執行並通過 | 設定 `E2E_USER_EMAIL`、`E2E_USER_PASSWORD`（owner 角色）與 `E2E_MEMBER_EMAIL`、`E2E_MEMBER_PASSWORD`（非 owner 角色），對 staging 環境執行 `npx playwright test`，所有 test 必須 pass（不能全 skip） |
 | **D** | `BillingRecord.amount_usd` 欄位重命名 | 撰寫 Alembic migration 將欄位重命名為 `amount_twd`，在 staging 驗證後套用至 production，避免對帳與稽核時的幣別語意錯誤 |
+| **E** | NewebPay E2E 測試紀錄 | 補一份端到端測試紀錄：成功、失敗、重複通知、金額錯誤、方案升級、對帳 |
+| **F** | Production-like staging 驗證 | HTTPS、Secure cookie、MFA、Admin IP whitelist、DB SSL、ClamAV 實際驗證並留存截圖或 log |
 
-> 詳細判定依據見 [`docs/FINAL_PRODUCTION_REVIEW_2026-04-12.md`](docs/FINAL_PRODUCTION_REVIEW_2026-04-12.md)
+> 詳細判定依據見 [`docs/OPERATION_READINESS_REVIEW_2026-04-30.md`](docs/OPERATION_READINESS_REVIEW_2026-04-30.md)
 
 ---
 
@@ -1569,12 +1583,13 @@ unihr-saas/
 │       ├── App.tsx                # 後台路由
 │       ├── api.ts                 # Admin API 客戶端
 │       ├── auth.tsx               # 管理員認證
-│       └── pages/                 # 後台頁面
-│           ├── LoginPage.tsx
-│           ├── AdminPage.tsx
-│           ├── AdminQuotaPage.tsx
-│           ├── PnLPage.tsx            # ★ 平台損益分析（PnL）
-│           └── AnalyticsPage.tsx
+│       └── pages/                 # 後台頁面（6 頁）
+│           ├── LoginPage.tsx        #   管理員登入
+│           ├── AdminPage.tsx        #   平台管理（租戶/用戶/系統健康/總覽）
+│           ├── AdminQuotaPage.tsx   #   配額管理（per-tenant 配額設定與告警）
+│           ├── MonitoringPage.tsx   # ★ 監控中心（系統健康 + 告警列表）
+│           ├── PnLPage.tsx          # ★ 收支總覽（平台損益 + AI 成本分析）
+│           └── AnalyticsPage.tsx   #   成本分析（使用趨勢 + 每日分析）
 ├── nginx/                         # ★ Nginx 閘道設定
 │   ├── gateway.conf               #   多域名反向代理（app/admin/監控頁面）
 │   ├── admin.conf                 #   Admin 站點設定
@@ -1607,6 +1622,8 @@ unihr-saas/
 │   ├── create_test_users.py       #   測試帳號建立
 │   ├── generate_secrets.py        # ★ 生產密鑰生成工具（SECRET_KEY / POSTGRES_PASSWORD / REDIS_PASSWORD 等）
 │   ├── verify_backup.sh           # ★ Phase 9: 備份還原自動化驗證（4 步驟沙盒）
+│   ├── release_preflight.py       # ★ Release 上線前全項檢查（支援 docker-compose / docker compose 自動偵測）
+│   ├── seed_demo_data.py          # ★ Admin Panel Demo 資料植入（7 租戶 / 90 天使用紀錄 / 帳單 / 告警）
 │   └── initial_data.py            #   初始化資料（讀取 FIRST_SUPERUSER_EMAIL/PASSWORD）
 ├── docs/                          # 專案文件
 │   ├── PROJECT_PLAN.md            #   完整產品規格書（1500+ 行）
@@ -1661,8 +1678,21 @@ unihr-saas/
 | Phase 11 | 檢索引擎強化：pgvector 雙寫 + 零向量排除 + BM25 快取 + Native-first 解析策略 | ? 完成 |
 | Phase 12 | LLMOps 可觀測性：Langfuse 追蹤（解析/嵌入/RAG 端到端）+ MCP Server（hr_knowledge_search / hr_policy_qa / list_documents） | ? 完成 |
 | Phase 13 | 進度追蹤與品質儀表板：Redis 即時文件處理進度 + Quality Dashboard（文件品質/檢索品質）+ 品牌驗證（色碼/URL）+ LLM Guardrail（Prompt Injection 攔截 + 敏感資訊過濾）+ 金流整合（Stripe + 藍新金流）+ Email 服務（Resend/SendGrid/SMTP）+ 安全修復 | ? 完成 |
+| **Phase 14** | **對外營運前修復（2026-04-30）**：Release preflight 全綠 + Admin panel 5 頁完整化 + Demo 資料植入工具 | ? 完成 |
 
-### Phase 13 任務清單（進度追蹤、品質儀表板、品牌驗證 — 完成）
+### Phase 14 任務清單（對外營運前修復 — 完成）
+
+**觸發**：[OPERATION_READINESS_REVIEW_2026-04-30.md](docs/OPERATION_READINESS_REVIEW_2026-04-30.md) 審查報告識別的所有可程式化 P0 問題，於 2026-04-30 全數修補。
+
+| 項目 | 說明 | 狀態 |
+|------|------|------|
+| P14-1 | Worker healthcheck 假陽性修復：`docker-compose.prod.yml` 移除 `\|\| exit 0` fail-open | ? |
+| P14-2 | PricingPage Enterprise CTA 修復：`sales@example.com` → `sales@aihr.app` | ? |
+| P14-3 | Frontend lint 修復：`frontend/src/api.ts` 5 個 `any`（axios module augmentation 擴展型別）+ `SubscriptionPage.tsx` 1 個 `any` | ? |
+| P14-4 | Release preflight compose CLI 自動偵測：`scripts/release_preflight.py` 新增 `_compose_cmd()` 自動偵測 `docker-compose` / `docker compose` | ? |
+| P14-5 | Admin MonitoringPage lint 修復：`// eslint-disable-line react-hooks/set-state-in-effect` | ? |
+| P14-6 | Admin panel Demo 資料工具：`scripts/seed_demo_data.py` 植入 7 個台灣租戶 / 90 天使用紀錄 / 帳單 / 配額告警（`--clean` 可清除） | ? |
+| P14-7 | README 安全化：移除 live server IP 與個人路徑，改為 `<YOUR_SERVER_IP>` placeholder | ? |
 
 | 項目 | 說明 | 狀態 |
 |------|------|------|

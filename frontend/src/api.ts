@@ -1,10 +1,25 @@
 import axios from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
 import type {
   User, Document, ChatRequest, ChatResponse,
   Conversation, Message, UsageSummary, UsageByAction,
   UsageRecord, AuditLog,
   SSEEvent, FeedbackCreate, FeedbackResponse, SearchResult,
 } from './types'
+
+// Extend axios config to allow custom flags used by interceptors
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    _retry?: boolean
+    _skipRefresh?: boolean
+    _skipAuthRedirect?: boolean
+  }
+  interface InternalAxiosRequestConfig {
+    _retry?: boolean
+    _skipRefresh?: boolean
+    _skipAuthRedirect?: boolean
+  }
+}
 
 export interface LoginResponse {
   token_type: string
@@ -46,14 +61,14 @@ api.interceptors.request.use((config) => {
 let refreshPromise: Promise<void> | null = null
 
 async function refreshSession() {
-  await api.post<LoginResponse>('/auth/refresh', {}, { _skipRefresh: true } as any)
+  await api.post<LoginResponse>('/auth/refresh', {}, { _skipRefresh: true })
 }
 
 // ─── Response interceptor: attempt refresh, then redirect on 401 ───
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
-    const originalRequest = (err.config || {}) as { _retry?: boolean; _skipRefresh?: boolean; _skipAuthRedirect?: boolean }
+    const originalRequest = (err.config || {}) as InternalAxiosRequestConfig
     if (originalRequest._skipAuthRedirect) {
       return Promise.reject(err)
     }
@@ -62,7 +77,7 @@ api.interceptors.response.use(
       try {
         refreshPromise ??= refreshSession().finally(() => { refreshPromise = null })
         await refreshPromise
-        return api(originalRequest as any)
+        return api(originalRequest)
       } catch {
         window.location.href = '/login'
       }
@@ -87,7 +102,9 @@ export const authApi = {
     return data
   },
   refresh: async (options?: { silent?: boolean }) => {
-    const config = options?.silent ? ({ _skipRefresh: true, _skipAuthRedirect: true } as any) : undefined
+    const config: import('axios').AxiosRequestConfig | undefined = options?.silent
+      ? { _skipRefresh: true, _skipAuthRedirect: true }
+      : undefined
     const { data } = await api.post<LoginResponse>('/auth/refresh', {}, config)
     return data
   },
@@ -103,7 +120,7 @@ export const authApi = {
     api.post<{ msg: string; already_verified: boolean }>('/auth/verify-email', { token }).then(r => r.data),
   resendVerification: (email: string) =>
     api.post<{ msg: string }>('/auth/resend-verification', { email }).then(r => r.data),
-  me: () => api.get<User>('/users/me', { _skipAuthRedirect: true } as any).then(r => r.data),
+  me: () => api.get<User>('/users/me', { _skipAuthRedirect: true }).then(r => r.data),
   mfaStatus: () => api.get<MFAStatusResponse>('/auth/mfa/status').then(r => r.data),
   mfaSetup: () => api.post<MFASetupResponse>('/auth/mfa/setup').then(r => r.data),
   mfaEnable: (setup_token: string, code: string) =>
@@ -229,7 +246,7 @@ export const companyApi = {
   deactivateUser: (id: string) => api.delete(`/company/users/${id}`).then(r => r.data),
   usageSummary: () => api.get('/company/usage/summary').then(r => r.data),
   usageByUser: () => api.get('/company/usage/by-user').then(r => r.data),
-  branding: () => api.get('/company/branding', { _skipAuthRedirect: true } as any).then(r => r.data),
+  branding: () => api.get('/company/branding', { _skipAuthRedirect: true }).then(r => r.data),
   updateBranding: (data: Record<string, unknown>) =>
     api.put('/company/branding', data).then(r => r.data),
   qualityDashboard: (days = 30) =>

@@ -155,6 +155,31 @@ export const adminApi = {
   // ─ Security Config ─
   tenantSecurity: (id: string) => api.get(`/admin/tenants/${id}/security`).then(r => r.data),
   updateSecurity: (id: string, data: Record<string, unknown>) => api.put(`/admin/tenants/${id}/security`, data).then(r => r.data),
+  // ─ Monitoring Center ─
+  monitoringAlerts: (params?: Record<string, string>) =>
+    api.get<MonitoringAlertsResponse>('/admin/monitoring/alerts', { params }).then(r => r.data),
+}
+
+// ─── Monitoring ───
+export interface MonitoringAlertItem {
+  id: string
+  tenant_id: string
+  tenant_name: string
+  alert_type: 'exceeded' | 'warning'
+  resource: string
+  current_value: number
+  limit_value: number | null
+  usage_ratio: number
+  message: string | null
+  notified: boolean
+  created_at: string | null
+}
+
+export interface MonitoringAlertsResponse {
+  total: number
+  exceeded_count: number
+  warning_count: number
+  alerts: MonitoringAlertItem[]
 }
 
 // ─── Cost Analytics ───

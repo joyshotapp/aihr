@@ -162,7 +162,7 @@ export default function PricingPage() {
               <div className="mt-auto pt-8">
                 {plan.name === 'enterprise' ? (
                   <a
-                    href="mailto:sales@example.com"
+                    href="mailto:sales@aihr.app"
                     className="block w-full rounded-xl border border-gray-200 bg-white py-3 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     {plan.cta}
