@@ -40,13 +40,15 @@
 
 | 頁面 | URL | 說明 |
 |------|-----|------|
-| **前台銷售頁** | `http://<YOUR_SERVER_IP>/` | 公開首頁、定價、登入／註冊（port 80） |
-| **使用者工作台** | `http://<YOUR_SERVER_IP>/app` | 登入後 HR／員工操作介面（port 80） |
-| **系統管理後台** | `http://<YOUR_SERVER_IP>:8080/` | 平台維運 Admin Panel（port 8080） |
-| **API Swagger** | `http://<YOUR_SERVER_IP>/api/v1/docs` | OpenAPI 互動文件 |
+| **前台銷售頁** | `http://172.235.216.122/` | 公開首頁、定價、登入／註冊（port 80） |
+| **使用者工作台** | `http://172.235.216.122/app` | 登入後 HR／員工操作介面（port 80） |
+| **系統管理後台** | `http://172.235.216.122:8080/` | 平台維運 Admin Panel（port 8080） |
+| **API Swagger** | `http://172.235.216.122/api/v1/docs` | OpenAPI 互動文件 |
 
 > ⚠️ **管理後台帳號與密碼不記錄於版本控制。**
 > 相關資訊請查閱 Linode 機器上的 `/opt/aihr/.env.production`，或詢問有權限的維運人員。
+
+> 💡 **SSH 快速連入**：`ssh aihr-prod`（金鑰 `~/.ssh/id_ed25519`，已設定於 `~/.ssh/config`）
 
 ### 3) RD 本機 10 分鐘跑起來（Docker）
 
@@ -60,7 +62,7 @@ docker-compose exec web python scripts/initial_data.py
 ### 4) 跑一次最準的雲端 E2E（建議 RD）
 
 ```powershell
-$env:AIHR_BASE_URL="http://<YOUR_SERVER_IP>"
+$env:AIHR_BASE_URL="http://172.235.216.122"
 $env:AIHR_SUPERUSER_EMAIL="<你的superuser email>"
 $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
 .venv/Scripts/python.exe scripts/live_e2e_test.py
@@ -73,7 +75,7 @@ $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
 python scripts/check_local_cloud_parity.py
 
 # 同時比對 Linode /opt/aihr/.env.production（遮罩顯示）
-python scripts/check_local_cloud_parity.py --host <YOUR_SERVER_IP> --user root --key ~/.ssh/id_ed25519_aihr
+python scripts/check_local_cloud_parity.py --host 172.235.216.122 --user root --key ~/.ssh/id_ed25519
 ```
 
 ### 6) 前端公開站 / 工作台路由速記
@@ -96,7 +98,7 @@ npm run verify:surface -- --base-url http://127.0.0.1:4173 --dist-dir dist
 
 ```powershell
 cd frontend
-$env:FRONTEND_VERIFY_BASE_URL="http://<YOUR_SERVER_IP>"
+$env:FRONTEND_VERIFY_BASE_URL="http://172.235.216.122"
 npm run verify:surface -- --dist-dir dist
 ```
 
@@ -516,6 +518,44 @@ Push to main
   └─ deploy-production → 部署至 Production 環境（手動觸發，需審核）
 ```
 
+### 線上伺服器部署（Linode）
+
+目前生產伺服器運行於 Linode，專案部署路徑為 `/opt/aihr`。
+
+**連線方式**（已設定免密金鑰）：
+
+```bash
+ssh aihr-prod
+# 等同於：ssh root@<SERVER_IP>（金鑰：~/.ssh/id_ed25519）
+```
+
+**更新部署流程**（rsync + rebuild）：
+
+```bash
+# 1. 上傳後端變更
+rsync -avz app/ -e ssh root@aihr-prod:/opt/aihr/app/
+
+# 2. 上傳前端變更
+rsync -avz frontend/src/ -e ssh root@aihr-prod:/opt/aihr/frontend/src/
+rsync -avz admin-frontend/src/ -e ssh root@aihr-prod:/opt/aihr/admin-frontend/src/
+
+# 3. 重建並重啟容器
+ssh aihr-prod "cd /opt/aihr && \
+  docker compose -f docker-compose.prod.yml --env-file .env.production \
+  build web worker frontend admin-frontend admin-api && \
+  docker compose -f docker-compose.prod.yml --env-file .env.production \
+  up -d --no-deps web worker frontend admin-frontend admin-api"
+
+# 4. 健康確認
+ssh aihr-prod "curl -sf http://localhost/health && echo OK"
+```
+
+> ⚠️ `scripts/seed_demo_data.py` **僅限本機開發 / demo 環境**，請勿在 production 執行。
+
+> ⚠️ 伺服器 IP 不記錄於版本控制，請從 `/opt/aihr/.env.production` 或 `~/.ssh/config` 取得。
+
+---
+
 ### Docker 生產部署
 
 生產環境透過 `docker-compose.prod.yml` 編排 **12 個容器**：
@@ -688,7 +728,8 @@ docker-compose exec web python scripts/create_test_users.py
 
 > ⚠️ 生產環境帳號密碼**不記錄於版本控制**。查閱方式：
 > ```bash
-> ssh -i ~/.ssh/id_ed25519_aihr root@<YOUR_SERVER_IP> "grep FIRST_SUPERUSER /opt/aihr/.env.production"
+> ssh aihr-prod "grep FIRST_SUPERUSER /opt/aihr/.env.production"
+# 或：ssh -i ~/.ssh/id_ed25519 root@172.235.216.122 "grep FIRST_SUPERUSER /opt/aihr/.env.production"
 > ```
 
 | 角色 | 取得方式 |
