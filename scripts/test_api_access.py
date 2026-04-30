@@ -2,7 +2,7 @@
 """快速測試 API 可訪問性"""
 import requests
 
-BASE_URL = "http://api.172-237-5-254.sslip.io"
+BASE_URL = "http://172.235.216.122"
 
 # 測試 1: Nginx 健康檢查
 print(f"[1] 測試 {BASE_URL}/health")

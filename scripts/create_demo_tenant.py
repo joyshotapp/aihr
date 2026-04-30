@@ -7,7 +7,7 @@ import urllib.request
 import urllib.parse
 import json
 
-BASE = "http://api.172-237-5-254.sslip.io"
+BASE = "http://172.235.216.122"
 DEMO_EMAIL = "demo@unihr.ai"
 DEMO_PASS  = "admin123"
 DEMO_TENANT = "UniHR 現場展示公司"

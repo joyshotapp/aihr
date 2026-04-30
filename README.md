@@ -38,11 +38,14 @@
 
 ### 2) 雲端（Linode）直接測試
 
-- 使用者介面：`http://<PRODUCTION_HOST>`（前台，port 80）
-- 管理後台：`http://<PRODUCTION_HOST>:8080`（Admin Panel，port 8080）
-- API Swagger：`http://<PRODUCTION_HOST>/api/v1/docs`
+| 頁面 | URL | 說明 |
+|------|-----|------|
+| **前台銷售頁** | `http://172.235.216.122/` | 公開首頁、定價、登入／註冊（port 80） |
+| **使用者工作台** | `http://172.235.216.122/app` | 登入後 HR／員工操作介面（port 80） |
+| **系統管理後台** | `http://172.235.216.122:8080/` | 平台維運 Admin Panel（port 8080） |
+| **API Swagger** | `http://172.235.216.122/api/v1/docs` | OpenAPI 互動文件 |
 
-> ⚠️ **正式站點 IP、管理後台帳號與密碼不記錄於版本控制。**
+> ⚠️ **管理後台帳號與密碼不記錄於版本控制。**
 > 相關資訊請查閱 Linode 機器上的 `/opt/aihr/.env.production`，或詢問有權限的維運人員。
 
 ### 3) RD 本機 10 分鐘跑起來（Docker）
@@ -57,7 +60,7 @@ docker-compose exec web python scripts/initial_data.py
 ### 4) 跑一次最準的雲端 E2E（建議 RD）
 
 ```powershell
-$env:AIHR_BASE_URL="http://<PRODUCTION_HOST>"
+$env:AIHR_BASE_URL="http://172.235.216.122"
 $env:AIHR_SUPERUSER_EMAIL="<你的superuser email>"
 $env:AIHR_SUPERUSER_PASS="<你的superuser password>"
 C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
@@ -70,7 +73,7 @@ C:/Users/User/Desktop/aihr/.venv/Scripts/python.exe scripts/live_e2e_test.py
 python scripts/check_local_cloud_parity.py
 
 # 同時比對 Linode /opt/aihr/.env.production（遮罩顯示）
-python scripts/check_local_cloud_parity.py --host <PRODUCTION_HOST> --user root --key C:/Users/User/.ssh/id_rsa_linode
+python scripts/check_local_cloud_parity.py --host 172.235.216.122 --user root --key C:/Users/User/.ssh/id_ed25519_aihr
 ```
 
 ### 6) 前端公開站 / 工作台路由速記
@@ -93,7 +96,7 @@ npm run verify:surface -- --base-url http://127.0.0.1:4173 --dist-dir dist
 
 ```powershell
 cd frontend
-$env:FRONTEND_VERIFY_BASE_URL="http://<PRODUCTION_HOST>"
+$env:FRONTEND_VERIFY_BASE_URL="http://172.235.216.122"
 npm run verify:surface -- --dist-dir dist
 ```
 
@@ -648,12 +651,52 @@ python scripts/release_preflight.py --include-audit
 
 ## 測試登入帳號（如何取得 / 忘記怎麼辦）
 
-### Superuser（平台管理員）
+### 角色說明
 
-- 系統的首位 Superuser 是由 `scripts/initial_data.py` 依照環境變數建立/確認：
-- `FIRST_SUPERUSER_EMAIL`
-- `FIRST_SUPERUSER_PASSWORD`
-- **Linode/雲端**：請到伺服器上的 `.env.production` 查看（例如 `/opt/aihr/.env.production`）。
+系統共有六級角色（由高至低）：`superadmin` → `owner` → `admin` → `hr` → `employee` → `viewer`
+
+| 角色 | 適用對象 | 主要權限 |
+|------|---------|---------|
+| `superadmin` | 平台維運人員 | 全域管理、所有租戶、系統設定 |
+| `owner` | 企業主、創辦人 | 管理自己租戶的所有設定、帳單 |
+| `admin` | HR 主管 | 管理部門、使用者、文件、知識庫 |
+| `hr` | HR 同仁 | 上傳文件、查看報表、管理員工問答 |
+| `employee` | 一般員工 | AI 問答、查看個人用量 |
+| `viewer` | 唯讀訪客 | 只能查看，不能操作 |
+
+---
+
+### 本機開發帳號（Docker 本機環境）
+
+> ⚠️ 以下帳號僅適用於本機開發。執行 `scripts/create_test_users.py` 建立。
+
+| 角色 | Email | 密碼 | 所屬租戶 |
+|------|-------|------|---------|
+| `superadmin` | `admin@example.com` | `admin123` | 系統平台 |
+| `owner` | `owner@test.com` | `owner123` | Test Company |
+| `admin` | `admin@test.com` | `admin123` | Test Company |
+| `employee` | `employee@test.com` | `employee123` | Test Company |
+
+```bash
+# 建立本機測試帳號（在 Docker 環境中執行）
+docker-compose exec web python scripts/create_test_users.py
+```
+
+---
+
+### 生產環境帳號（Linode `172.235.216.122`）
+
+> ⚠️ 生產環境帳號密碼**不記錄於版本控制**。查閱方式：
+> ```bash
+> ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122 "grep FIRST_SUPERUSER /opt/aihr/.env.production"
+> ```
+
+| 角色 | 取得方式 |
+|------|---------|
+| `superadmin` | `.env.production` 中的 `FIRST_SUPERUSER_EMAIL` / `FIRST_SUPERUSER_PASSWORD` |
+| 其他角色 | 由 superadmin 登入後台 → 使用者管理 → 新增 |
+
+---
 
 ### E2E 測試用 HR 帳號
 

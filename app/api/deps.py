@@ -54,6 +54,23 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Platform superusers without a tenant_id cannot access tenant-scoped endpoints
+    if user.is_superuser and user.tenant_id is None:
+        path = request.url.path
+        _ALLOWED_SUPERUSER_PATHS = (
+            "/api/v1/admin",
+            "/api/v1/users/me",
+            "/api/v1/auth",
+            "/api/v2/admin",
+            "/health",
+            "/metrics",
+        )
+        if not any(path.startswith(p) for p in _ALLOWED_SUPERUSER_PATHS):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Platform admin accounts cannot access tenant endpoints. Use the admin portal at :8080.",
+            )
+
     apply_rls_context(
         db,
         tenant_id=getattr(user, "tenant_id", None),

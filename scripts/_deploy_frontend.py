@@ -3,7 +3,7 @@ import subprocess
 import sys
 import time
 
-SSH_HOST = "root@172.233.67.81"
+SSH_HOST = "root@172.235.216.122"
 REMOTE_CMD = (
     "cd /opt/aihr && "
     "nohup bash -c '"

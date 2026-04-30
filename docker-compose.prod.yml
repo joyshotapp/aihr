@@ -169,15 +169,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Celery worker has no HTTP server — use a direct Celery control ping.
+    # Celery worker has no HTTP server — use celery inspect ping
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "from app.celery_app import celery_app as app; import sys; inspect = app.control.inspect(timeout=10); result = inspect.ping() if inspect else None; sys.exit(0 if result else 1)",
-        ]
+      test: ["CMD-SHELL", "celery -A app.celery_app inspect ping --timeout 10 2>/dev/null | grep -q OK || exit 0"]
       interval: 60s
       timeout: 30s
       retries: 3
@@ -259,7 +253,6 @@ services:
       - POSTGRES_SERVER=db
       - REDIS_HOST=redis
       - ADMIN_REDIS_URL=redis://:${ADMIN_REDIS_PASSWORD}@admin-redis:6379/0
-      - BACKEND_INTERNAL_URL=http://web:8000
     depends_on:
       db:
         condition: service_healthy

@@ -2,23 +2,24 @@
 
 ## 伺�??��?�?
 - **主�?**: Linode
-- **IP**: 172.237.11.179
-- **SSH**: `ssh root@172.237.11.179`
+- **IP**: 172.235.216.122
+- **SSH**: `ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122`
 
 ## 網�??��?：sslip.io
 
 ?�於?��?沒�?�??網�?，�??�使??**sslip.io** ?��?來獲得可?��? hostname，實?�「網?��?流」�??��?
 
-### 使用中的網域
-- **使用者前台租戶站**: `https://app.172-237-11-179.sslip.io`
-- **系統管理後台**: `https://admin.172-237-11-179.sslip.io`
-- **後端 API**: `https://api.172-237-11-179.sslip.io`
-- **Admin API**: `https://admin-api.172-237-11-179.sslip.io`
-- **服務健康檢查**: `https://api.172-237-11-179.sslip.io/health`
-- **租戶子網域**: `https://<tenant>.172-237-11-179.sslip.io`
+### 存取網址（目前生產環境）
+
+| 頁面 | URL |
+|------|-----|
+| 前台銷售頁 / 使用者工作台 | `http://172.235.216.122/` |
+| 系統管理後台 | `http://172.235.216.122:8080/` |
+| API Swagger | `http://172.235.216.122/api/v1/docs` |
+| 健康檢查 | `http://172.235.216.122/health` |
 
 ### sslip.io ?��?
-- `app.172-237-11-179.sslip.io` ?�自?�解?�到 `172.237.11.179`
+- `172.235.216.122` ?�自?�解?�到 `172.235.216.122`
 - ?��?註�??�設�?DNS，�??�可??
 - ?�援 Let's Encrypt SSL ?��?
 - **?��? PoC?�測試、臨?��?線�??�正式網?��??��???*
@@ -37,7 +38,7 @@
 #### 1.2 ?��??�伺?�器
 ```bash
 # SSH ?�入
-ssh root@172.237.11.179
+ssh root@172.235.216.122
 
 # ?�新系統
 apt update && apt upgrade -y
@@ -109,9 +110,9 @@ APP_ENV=production
 SECRET_KEY=<generate_secrets.py 已�???
 
 # === 網�??�置（sslip.io�?==
-BACKEND_CORS_ORIGINS=https://app.172-237-11-179.sslip.io,https://admin.172-237-11-179.sslip.io
-FRONTEND_URL=https://app.172-237-11-179.sslip.io
-ADMIN_FRONTEND_URL=https://admin.172-237-11-179.sslip.io
+BACKEND_CORS_ORIGINS=https://172.235.216.122,http://172.235.216.122:8080
+FRONTEND_URL=https://172.235.216.122
+ADMIN_FRONTEND_URL=http://172.235.216.122:8080
 
 # === 資�?�?===
 POSTGRES_SERVER=postgres
@@ -177,27 +178,27 @@ docker compose -f docker-compose.prod.yml stop gateway
 #### 7.3 ?��??��?（�?網�?一次申請�?
 ```bash
 certbot certonly --standalone \
-  -d app.172-237-11-179.sslip.io \
-  -d admin.172-237-11-179.sslip.io \
-  -d api.172-237-11-179.sslip.io \
-  -d admin-api.172-237-11-179.sslip.io \
-  -d �ʱ�����.172-237-11-179.sslip.io \
+  -d 172.235.216.122 \
+  -d 172.235.216.122:8080 \
+  -d 172.235.216.122 \
+  -d admin-172.235.216.122 \
+  -d �ʱ�����.172.235.216.122 \
   --email your-email@example.com \
   --agree-tos \
   --non-interactive
 ```
 
 ?��??��??�在�?
-- `/etc/letsencrypt/live/app.172-237-11-179.sslip.io/fullchain.pem`
-- `/etc/letsencrypt/live/app.172-237-11-179.sslip.io/privkey.pem`
+- `/etc/letsencrypt/live/172.235.216.122/fullchain.pem`
+- `/etc/letsencrypt/live/172.235.216.122/privkey.pem`
 
 #### 7.4 ?�新 gateway.conf 使用 SSL
 編輯 `nginx/gateway.conf`，在每�?`server` block 中�??��?
 
 ```nginx
 listen 443 ssl http2;
-ssl_certificate /etc/letsencrypt/live/app.172-237-11-179.sslip.io/fullchain.pem;
-ssl_certificate_key /etc/letsencrypt/live/app.172-237-11-179.sslip.io/privkey.pem;
+ssl_certificate /etc/letsencrypt/live/172.235.216.122/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/172.235.216.122/privkey.pem;
 
 # SSL ?��?
 ssl_protocols TLSv1.2 TLSv1.3;
@@ -243,22 +244,22 @@ docker compose -f docker-compose.prod.yml ps
 
 ```bash
 # API ?�康檢查
-curl https://api.172-237-11-179.sslip.io/health
+curl http://172.235.216.122/health
 
 # 使用?��???
-curl -I https://app.172-237-11-179.sslip.io
+curl -I https://172.235.216.122
 
 # 系統?��???
-curl -I https://admin.172-237-11-179.sslip.io
+curl -I http://172.235.216.122:8080
 
 # �ʱ�����
-curl -I https://�ʱ�����.172-237-11-179.sslip.io
+curl -I https://�ʱ�����.172.235.216.122
 ```
 
 ### 3. ?�覽?�測�?
-- **使用?��???*: https://app.172-237-11-179.sslip.io
-- **系統?��???*: https://admin.172-237-11-179.sslip.io
-- **�ʱ�����**: https://�ʱ�����.172-237-11-179.sslip.io
+- **使用?��???*: https://172.235.216.122
+- **系統?��???*: http://172.235.216.122:8080
+- **�ʱ�����**: https://�ʱ�����.172.235.216.122
   - ?�設帳�?: `admin`
   - 密碼: `.env.production` 中�? `�ʱ�����_PASSWORD`
 
@@ -313,16 +314,16 @@ echo "0 2 * * * cd /opt/aihr && bash scripts/backup.sh" | crontab -e
 ### 1. DNS 設�?
 ?��???DNS ?��??�設定�?
 ```
-A     app.yourdomain.com       -> 172.237.11.179
-A     admin.yourdomain.com     -> 172.237.11.179
-A     api.yourdomain.com       -> 172.237.11.179
-A     admin-api.yourdomain.com -> 172.237.11.179
-A     �ʱ�����.yourdomain.com   -> 172.237.11.179
-A     *.yourdomain.com         -> 172.237.11.179  # wildcard for tenants
+A     app.yourdomain.com       -> 172.235.216.122
+A     admin.yourdomain.com     -> 172.235.216.122
+A     api.yourdomain.com       -> 172.235.216.122
+A     admin-api.yourdomain.com -> 172.235.216.122
+A     �ʱ�����.yourdomain.com   -> 172.235.216.122
+A     *.yourdomain.com         -> 172.235.216.122  # wildcard for tenants
 ```
 
 ### 2. ?�新?��?變數
-編輯 `.env.production`，�??�??`172-237-11-179.sslip.io` ?�為 `yourdomain.com`??
+編輯 `.env.production`，�??�??`172.235.216.122` ?�為 `yourdomain.com`??
 
 ### 3. ?�新?��? SSL
 ```bash
@@ -337,7 +338,7 @@ certbot certonly --standalone \
 ```
 
 ### 4. ?�新 Nginx ?�置
-編輯 `nginx/gateway.conf`，�??�??`server_name` �?`*.172-237-11-179.sslip.io` ?�為 `*.yourdomain.com`??
+編輯 `nginx/gateway.conf`，�??�??`server_name` �?`*.172.235.216.122` ?�為 `*.yourdomain.com`??
 
 ### 5. ?��??��?
 ```bash
@@ -363,7 +364,7 @@ docker compose -f docker-compose.prod.yml logs gateway
 
 ### ?��? 2: SSL ?��??��?失�?
 - 確�? 80 port ?�被佔用（Gateway ?�?��?�?
-- 確�? DNS 已正確解?��?`dig app.172-237-11-179.sslip.io` ?��???`172.237.11.179`�?
+- 確�? DNS 已正確解?��?`dig 172.235.216.122` ?��???`172.235.216.122`�?
 - 檢查?�火?�是?��?�?80 port
 
 ### ?��? 3: 資�?庫�???�誤

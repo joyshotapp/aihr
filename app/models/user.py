@@ -34,7 +34,7 @@ class User(Base):
     agreed_to_terms = Column(Boolean, default=False, nullable=False)
     agreed_at = Column(DateTime(timezone=True), nullable=True)
 
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

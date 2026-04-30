@@ -103,7 +103,6 @@ class Settings(BaseSettings):
     CLAMAV_FAIL_CLOSED: bool = True
     R2_ENDPOINT: str = ""
     R2_BUCKET: str = "aihr-uploads"
-    AUTO_PROVISION_CLOUD_RESOURCES: bool = False
 
     # Pinecone（向量資料庫）
     PINECONE_API_KEY: str = ""
@@ -183,7 +182,6 @@ class Settings(BaseSettings):
     # Billing / payment links
     BILLING_CONTACT_URL: str = "mailto:sales@aihr.app"
     BACKEND_BASE_URL: str = "http://localhost:8000"
-    BACKEND_INTERNAL_URL: str = "http://localhost:8000"
 
     # NewebPay 藍新金流
     NEWEBPAY_MERCHANT_ID: str = ""
@@ -196,6 +194,9 @@ class Settings(BaseSettings):
     CUSTOM_DOMAIN_SSL_COMMAND_TEMPLATE: str = ""
     CUSTOM_DOMAIN_SSL_RELOAD_COMMAND: str = ""
     CUSTOM_DOMAIN_SSL_TIMEOUT_SECONDS: int = 600
+
+    # Cloud resource auto-provisioning
+    AUTO_PROVISION_CLOUD_RESOURCES: bool = False
 
     # Admin TOTP MFA
     MFA_ISSUER_NAME: str = "UniHR"
@@ -215,18 +216,17 @@ class Settings(BaseSettings):
     ADMIN_IP_WHITELIST: str = "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     ADMIN_TRUSTED_PROXY_IPS: str = "127.0.0.1,::1"
 
+    # Sentry 可觀測性
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_PROFILES_SAMPLE_RATE: float = 0.0
+
     # Langfuse LLMOps 可觀測性
     LANGFUSE_ENABLED: bool = False
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
-    LANGFUSE_METRICS_WINDOW_DAYS: int = 7
-
-    # Sentry
-    SENTRY_DSN: str = ""
-    SENTRY_ENVIRONMENT: str = ""
-    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
-    SENTRY_PROFILES_SAMPLE_RATE: float = 0.0
 
     # MCP Server
     MCP_ENABLED: bool = False

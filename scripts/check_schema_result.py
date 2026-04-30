@@ -38,18 +38,18 @@ print(out if out else "(no errors in last 2 min)")
 import requests
 try:
     # Login first
-    r = requests.post("http://api.172-237-5-254.sslip.io/api/v1/auth/login/access-token",
+    r = requests.post("http://172.235.216.122/api/v1/auth/login/access-token",
                        data={"username": "admin@example.com", "password": "mcWzOEha0w7zKH9u53yG7Q"}, timeout=10)
     token = r.json().get("access_token")
     
     # Try list documents
-    r2 = requests.get("http://api.172-237-5-254.sslip.io/api/v1/documents/",
+    r2 = requests.get("http://172.235.216.122/api/v1/documents/",
                        headers={"Authorization": f"Bearer {token}"}, timeout=10)
     print(f"\n=== List documents response: {r2.status_code} ===")
     print(r2.text[:500])
     
     # Try upload a txt file
-    r3 = requests.post("http://api.172-237-5-254.sslip.io/api/v1/documents/upload",
+    r3 = requests.post("http://172.235.216.122/api/v1/documents/upload",
                         headers={"Authorization": f"Bearer {token}"},
                         files={"file": ("test.txt", b"Hello world test content", "text/plain")},
                         timeout=10)

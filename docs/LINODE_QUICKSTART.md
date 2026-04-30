@@ -1,9 +1,9 @@
 # Linode å¿«é€Ÿéƒ¨ç½????½ä»¤??
 
 ## ä¼ºæ??¨è?è¨?
-- IP: `172.237.11.179`
-- SSH: `ssh root@172.237.11.179`
-- ç¶²å?: ä½¿ç”¨ `sslip.io` (ä¾? `app.172-237-11-179.sslip.io`)
+- IP: `172.235.216.122`
+- SSH: `ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122`
+- ç¶²å?: ä½¿ç”¨ `sslip.io` (ä¾? `172.235.216.122`)
 
 ---
 
@@ -11,7 +11,7 @@
 
 ```bash
 # SSH ?»å…¥ Linode
-ssh root@172.237.11.179
+ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122
 
 # ?·è??¨ç½²?³æœ¬
 cd /opt
@@ -57,10 +57,10 @@ bash scripts/verify_deployment.sh
 
 | ?å? | ç¶²å? |
 |-----|-----|
-| ä½¿ç”¨?…ä???| http://app.172-237-11-179.sslip.io |
-| ç³»çµ±?¹ä???| http://admin.172-237-11-179.sslip.io |
-| API ?‡ä»¶ | http://api.172-237-11-179.sslip.io/docs |
-| ºÊ±±­¶­± | http://ºÊ±±­¶­±.172-237-11-179.sslip.io |
+| ä½¿ç”¨?…ä???| http://172.235.216.122 |
+| ç³»çµ±?¹ä???| http://172.235.216.122:8080 |
+| API ?‡ä»¶ | http://172.235.216.122/docs |
+| ºÊ±±­¶­± | http://ºÊ±±­¶­±.172.235.216.122 |
 
 ---
 
@@ -70,7 +70,7 @@ bash scripts/verify_deployment.sh
 
 ```bash
 # SSH ?»å…¥
-ssh root@172.237.11.179
+ssh -i ~/.ssh/id_ed25519_aihr root@172.235.216.122
 
 # ?´æ–°ç³»çµ±
 apt update && apt upgrade -y
@@ -143,9 +143,9 @@ FIRST_SUPERUSER_EMAIL=admin@yourdomain.com
 FIRST_SUPERUSER_PASSWORD=<å¼·éš¨æ©Ÿå?ç¢?
 
 # ç¶²å??ç½®ï¼ˆsslip.ioï¼?
-BACKEND_CORS_ORIGINS=http://app.172-237-11-179.sslip.io,http://admin.172-237-11-179.sslip.io
-FRONTEND_URL=http://app.172-237-11-179.sslip.io
-ADMIN_FRONTEND_URL=http://admin.172-237-11-179.sslip.io
+BACKEND_CORS_ORIGINS=http://172.235.216.122,http://172.235.216.122:8080
+FRONTEND_URL=http://172.235.216.122
+ADMIN_FRONTEND_URL=http://172.235.216.122:8080
 ```
 
 ### 6. ?ç½® Gateway (ä½¿ç”¨ sslip.io)
@@ -201,19 +201,19 @@ apt install -y certbot python3-certbot-nginx
 
 ```bash
 certbot certonly --standalone \
-  -d app.172-237-11-179.sslip.io \
-  -d admin.172-237-11-179.sslip.io \
-  -d api.172-237-11-179.sslip.io \
-  -d admin-api.172-237-11-179.sslip.io \
-  -d ºÊ±±­¶­±.172-237-11-179.sslip.io \
+  -d 172.235.216.122 \
+  -d 172.235.216.122:8080 \
+  -d 172.235.216.122 \
+  -d admin-172.235.216.122 \
+  -d ºÊ±±­¶­±.172.235.216.122 \
   --email your-email@example.com \
   --agree-tos \
   --non-interactive
 ```
 
 ?‘è?ä½ç½®ï¼?
-- `/etc/letsencrypt/live/app.172-237-11-179.sslip.io/fullchain.pem`
-- `/etc/letsencrypt/live/app.172-237-11-179.sslip.io/privkey.pem`
+- `/etc/letsencrypt/live/172.235.216.122/fullchain.pem`
+- `/etc/letsencrypt/live/172.235.216.122/privkey.pem`
 
 ### 4. ?Ÿç”¨ HTTPSï¼ˆç·¨è¼?gateway.confï¼?
 
@@ -222,8 +222,8 @@ certbot certonly --standalone \
 ```nginx
 # å°‡æ???server ??listen ?¹ç‚ºï¼?
 listen 443 ssl http2;
-ssl_certificate     /etc/letsencrypt/live/app.172-237-11-179.sslip.io/fullchain.pem;
-ssl_certificate_key /etc/letsencrypt/live/app.172-237-11-179.sslip.io/privkey.pem;
+ssl_certificate     /etc/letsencrypt/live/172.235.216.122/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/172.235.216.122/privkey.pem;
 ssl_protocols       TLSv1.2 TLSv1.3;
 ssl_ciphers         HIGH:!aNULL:!MD5;
 ssl_prefer_server_ciphers on;
@@ -309,24 +309,24 @@ docker compose -f docker-compose.prod.yml exec redis redis-cli -a <REDIS_PASSWOR
 
 ### 1. DNS è¨­å?
 ```
-A     app.yourdomain.com       -> 172.237.11.179
-A     admin.yourdomain.com     -> 172.237.11.179
-A     api.yourdomain.com       -> 172.237.11.179
-A     admin-api.yourdomain.com -> 172.237.11.179
-A     ºÊ±±­¶­±.yourdomain.com   -> 172.237.11.179
-A     *.yourdomain.com         -> 172.237.11.179  # wildcard
+A     app.yourdomain.com       -> 172.235.216.122
+A     admin.yourdomain.com     -> 172.235.216.122
+A     api.yourdomain.com       -> 172.235.216.122
+A     admin-api.yourdomain.com -> 172.235.216.122
+A     ºÊ±±­¶­±.yourdomain.com   -> 172.235.216.122
+A     *.yourdomain.com         -> 172.235.216.122  # wildcard
 ```
 
 ### 2. ?´æ–°?°å?è®Šæ•¸
 ç·¨è¼¯ `.env.production`ï¼Œå…¨?Ÿæ›¿?›ï?
 ```bash
-172-237-11-179.sslip.io ??yourdomain.com
+172.235.216.122 ??yourdomain.com
 ```
 
 ### 3. ?´æ–° Nginx ?ç½®
 ç·¨è¼¯ `nginx/gateway.conf`ï¼Œå…¨?Ÿæ›¿?›ï?
 ```bash
-172-237-11-179.sslip.io ??yourdomain.com
+172.235.216.122 ??yourdomain.com
 ```
 
 ### 4. ?æ–°?³è? SSL
@@ -365,7 +365,7 @@ docker compose -f docker-compose.prod.yml logs gateway
 
 ### SSL ?‘è??–å?å¤±æ?
 - ç¢ºè? 80 port ?ªè¢«ä½”ç”¨ï¼ˆGateway ?€?«å?ï¼?
-- ç¢ºè? DNS å·²æ­£ç¢ºè§£?ï?`dig app.172-237-11-179.sslip.io`
+- ç¢ºè? DNS å·²æ­£ç¢ºè§£?ï?`dig 172.235.216.122`
 - æª¢æŸ¥?²ç«?†æ˜¯?¦å?è¨?80 port
 
 ### è³‡æ?åº«é€???¯èª¤
